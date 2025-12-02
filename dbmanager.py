@@ -44,7 +44,7 @@ class DynamoDBManager:
     def add_item(self, table_name: str) -> None:
         """Add a new item to specified table"""
         if table_name not in self.tables:
-            print(f"\n❌ Table {table_name} not found!")
+            print(f"\nTable {table_name} not found!")
             return
             
         config = self.table_configs[table_name]
@@ -74,14 +74,14 @@ class DynamoDBManager:
 
         try:
             self.tables[table_name].put_item(Item=item)
-            print(f"\n✅ Item added successfully to {table_name}!")
+            print(f"\n Item added successfully to {table_name}!")
         except ClientError as e:
-            print(f"\n❌ Error adding item: {e.response['Error']['Message']}")
+            print(f"\n Error adding item: {e.response['Error']['Message']}")
 
     def view_item(self, table_name: str) -> None:
         """View an item from specified table"""
         if table_name not in self.tables:
-            print(f"\n❌ Table {table_name} not found!")
+            print(f"\n Table {table_name} not found!")
             return
             
         config = self.table_configs[table_name]
@@ -95,14 +95,14 @@ class DynamoDBManager:
                 print("\n=== Item Details ===")
                 print(json.dumps(response["Item"], indent=2))
             else:
-                print(f"\n❌ Item with {config['key_field']} '{key_value}' not found")
+                print(f"\nItem with {config['key_field']} '{key_value}' not found")
         except ClientError as e:
-            print(f"\n❌ Error retrieving item: {e.response['Error']['Message']}")
+            print(f"\n Error retrieving item: {e.response['Error']['Message']}")
 
     def delete_item(self, table_name: str) -> None:
         """Delete an item from specified table"""
         if table_name not in self.tables:
-            print(f"\n❌ Table {table_name} not found!")
+            print(f"\n Table {table_name} not found!")
             return
             
         config = self.table_configs[table_name]
@@ -112,14 +112,14 @@ class DynamoDBManager:
             self.tables[table_name].delete_item(
                 Key={config['key_field']: key_value}
             )
-            print(f"\n✅ Item deleted successfully from {table_name}!")
+            print(f"\n Item deleted successfully from {table_name}!")
         except ClientError as e:
-            print(f"\n❌ Error deleting item: {e.response['Error']['Message']}")
+            print(f"\n Error deleting item: {e.response['Error']['Message']}")
 
     def list_all_items(self, table_name: str) -> None:
         """List all items in specified table"""
         if table_name not in self.tables:
-            print(f"\n❌ Table {table_name} not found!")
+            print(f"\n Table {table_name} not found!")
             return
             
         try:
@@ -137,7 +137,7 @@ class DynamoDBManager:
             
             print(f"\nTotal items: {len(items)}")
         except ClientError as e:
-            print(f"\n❌ Error listing items: {e.response['Error']['Message']}")
+            print(f"\n Error listing items: {e.response['Error']['Message']}")
 
     def get_table_choice(self) -> str:
         """Get user's table choice"""
@@ -150,9 +150,9 @@ class DynamoDBManager:
                 choice = int(input("\nSelect table (enter number): "))
                 if 1 <= choice <= len(self.tables):
                     return list(self.tables.keys())[choice - 1]
-                print("❌ Invalid choice!")
+                print(" Invalid choice!")
             except ValueError:
-                print("❌ Please enter a number!")
+                print(" Please enter a number!")
 
     def display_menu(self) -> None:
         """Display the main menu"""
@@ -174,7 +174,7 @@ class DynamoDBManager:
                 break
                 
             if choice not in ["1", "2", "3", "4"]:
-                print("\n❌ Invalid choice. Please try again.")
+                print("\n Invalid choice. Please try again.")
                 continue
                 
             table_name = self.get_table_choice()

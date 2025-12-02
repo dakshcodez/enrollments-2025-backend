@@ -436,7 +436,7 @@ def delete_email(email: str):
     round1_result = remove_round1_attribute(email)
     results.append(round1_result)
 
-    return {"message": "✅ Email deletions and updates completed.", "details": results}
+    return {"message": " Email deletions and updates completed.", "details": results}
 
 @admin_app.get("/search")
 async def search_user(email: str = Query(..., description="User email to search"), authorization: str = Depends(get_access_token)):

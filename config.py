@@ -36,9 +36,14 @@ def initialize():
     interview_table = dynamodb.Table("enrollments-site-interview")
 
     if not firebase_admin._apps:
-        encoded_key = os.getenv("MY_FIREBASE_SERVICE_ACCOUNT_KEY")
-        if encoded_key:
-            decoded_key = json.loads(base64.b64decode(encoded_key).decode('utf-8'))
+        service_account_key = os.getenv("MY_FIREBASE_SERVICE_ACCOUNT_KEY")
+        if service_account_key:
+         
+            try:
+                decoded_key = json.loads(service_account_key)
+            except json.JSONDecodeError:
+              
+                decoded_key = json.loads(base64.b64decode(service_account_key).decode('utf-8'))
             cred = credentials.Certificate(decoded_key)
             firebase_app = firebase_admin.initialize_app(cred)
         else:
