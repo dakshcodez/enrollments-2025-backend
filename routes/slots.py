@@ -47,6 +47,26 @@ async def post_slots(slot_req: Slot, idToken: str = Depends(get_access_token), r
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        # 1. Check if slot is already booked (Concurrency check)
+        slot_response = interview_table.get_item(Key={'iid': slot_req.iid})
+        slot_item = slot_response.get('Item')
+        
+        if not slot_item:
+             raise HTTPException(status_code=404, detail="Slot not found")
+             
+        if slot_item.get('isBooked'):
+             raise HTTPException(status_code=409, detail="Slot is already booked")
+
+        # 2. Mark it as Booked in Interview Table
+        interview_table.update_item(
+            Key={'iid': slot_req.iid},
+            UpdateExpression="set isBooked=:b, bookedBy=:u",
+            ExpressionAttributeValues={
+                ':b': True,
+                ':u': email
+            }
+        )
+
         # Updating the user record with selected slot
         user["slot"] = [{
             "iid": slot_req.iid,

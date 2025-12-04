@@ -293,11 +293,11 @@ async def mark_qualification(request: QualificationRequest, authorization: str =
                 content={"detail": "Invalid status. Must be 'qualified', 'unqualified', or 'pending'."}
             )
         
-        if request.round==1:
-            return JSONResponse(
-                status_code=203,
-                content={"detail": "Round 1 evaluations are closed'."}
-            )
+        # if request.round==1:
+        #     return JSONResponse(
+        #         status_code=203,
+        #         content={"detail": "Round 1 evaluations are closed'."}
+        #     )
 
         email = await verify_admin(authorization, request.domain)
         if isinstance(email, JSONResponse):
@@ -455,3 +455,38 @@ async def search_user(email: str = Query(..., description="User email to search"
         "status1": user.get("status1", {}),
         "status2": user.get("status2", {})
     }
+
+
+class SlotRequest(BaseModel):
+    domain: str
+    date: str
+    startTime: str
+    endTime: str
+    panel: int
+
+@admin_app.post("/create-slot")
+async def create_slot(slot_request: SlotRequest, authorization: str = Depends(get_access_token)):
+    email = await verify_admin(authorization, slot_request.domain)
+    if isinstance(email, JSONResponse):
+        return email
+
+    # Create unique ID: DOMAIN_DATE_START_PANEL
+    slot_id = f"{slot_request.domain}_{slot_request.date}_{slot_request.startTime}_P{slot_request.panel}"
+
+    interview_table = resources["interview_table"]
+
+    try:
+        interview_table.put_item(
+            Item={
+                "iid": slot_id,
+                "domain": slot_request.domain,
+                "date": slot_request.date,
+                "time_slot": f"{slot_request.startTime} - {slot_request.endTime}",
+                "panel": slot_request.panel, 
+                "isBooked": False, 
+                "bookedBy": None
+            }
+        )
+        return JSONResponse(status_code=200, content={"detail": f"Slot created successfully for Panel {slot_request.panel}"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error creating slot: {str(e)}"})

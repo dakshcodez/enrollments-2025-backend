@@ -1,0 +1,600 @@
+{
+    "info": {
+        "_postman_id": "ieee-enrollments-backend",
+        "name": "IEEE Enrollments Backend",
+        "description": "API Documentation for IEEE Enrollments Backend",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://127.0.0.1:8000",
+            "type": "string"
+        },
+        {
+            "key": "authToken",
+            "value": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjdjNzQ5NTFmNjBhMDE0NzE3ZjFlMzA4ZDZiMjgwZjQ4ZjFlODhmZGEiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiSGFyc2hhdmFyZGhhbiBLYW5nYWxhIERheWFuYW5kIDI0QkNJMDA5NiIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKZ1VfTEJfN1dYQnpNNXBsVHZaZzZvLUgweHhMT3IxTW14NkZyVEVLNXI0UU9VbFE9czk2LWMiLCJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vaWVlZWNzLWVucm9sbG1lbnRzIiwiYXVkIjoiaWVlZWNzLWVucm9sbG1lbnRzIiwiYXV0aF90aW1lIjoxNzY0NzgxOTkyLCJ1c2VyX2lkIjoiNW1jMk5zU0VRS2draEpBd09ScGFRQ2JSUnJzMiIsInN1YiI6IjVtYzJOc1NFUUtna2hKQXdPUnBhUUNiUlJyczIiLCJpYXQiOjE3NjQ3ODI5NDMsImV4cCI6MTc2NDc4NjU0MywiZW1haWwiOiJoYXJzaGF2YXJkaGFuLmthbmcyMDI0QHZpdHN0dWRlbnQuYWMuaW4iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJnb29nbGUuY29tIjpbIjExNjg5NjY0ODM0MjEzMjY4OTIyMyJdLCJlbWFpbCI6WyJoYXJzaGF2YXJkaGFuLmthbmcyMDI0QHZpdHN0dWRlbnQuYWMuaW4iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJnb29nbGUuY29tIn19.UG0Q8JkVhAQfwr72pNK1iWoVwRKnnkHV9KGkon5rschTftfjcKl-aP-qHsDDU7smLWnbO5xW3cLDg4t6iNKSeLjbIfyLJ1hODvJOFKeQlaTboi9Ww4156cSku1Nhlta3tsyOuW5dffdXwzfHEcDltqiY3p2FWBCXvreXvqOxt_o8tjPJw7g9_DTOcTdyfHzBr5TohXdVZPW5erXqouLNZ323_o9yqzouvaLvK9QO3FlfcdZUAdLYcu1dSS2f_2_usAgGdKfHcwAeuelQGywTvM_0FOlqFR8O03l_ON8YJE-S4lQkuw29a-dUMQ9edpK5RdgeDD_2HSy8uQmWVvzbaQ",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "Main",
+            "item": [
+                {
+                    "name": "Root",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                ""
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "User",
+            "item": [
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/user/login",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "user",
+                                "login"
+                            ]
+                        },
+                        "description": "Logs in the user using Firebase ID Token in Authorization header."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Profile",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/user/profile",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "user",
+                                "profile"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Submit Username",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"username\": \"testuser\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/user/username",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "user",
+                                "username"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Dashboard",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/user/dashboard?round=1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "user",
+                                "dashboard"
+                            ],
+                            "query": [
+                                {
+                                    "key": "round",
+                                    "value": "1",
+                                    "description": "Round number (e.g., 1 or 2)"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Admin",
+            "item": [
+                {
+                    "name": "Fetch Domains",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/fetch?domain=WEB&round=1&status=unmarked",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "fetch"
+                            ],
+                            "query": [
+                                {
+                                    "key": "domain",
+                                    "value": "WEB",
+                                    "description": "Domain name (e.g., WEB, APP, AI/ML)"
+                                },
+                                {
+                                    "key": "round",
+                                    "value": "1",
+                                    "description": "Round number"
+                                },
+                                {
+                                    "key": "status",
+                                    "value": "unmarked",
+                                    "description": "Status filter (unmarked, qualified, etc.)"
+                                },
+                                {
+                                    "key": "last_evaluated_key",
+                                    "value": null,
+                                    "disabled": true,
+                                    "description": "For pagination"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Add Question",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "domain",
+                                    "value": "WEB",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "round",
+                                    "value": "1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "question",
+                                    "value": "What is HTML?",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "options",
+                                    "value": "[\"Markup Language\", \"Programming Language\"]",
+                                    "type": "text",
+                                    "description": "JSON string of options list"
+                                },
+                                {
+                                    "key": "correctIndex",
+                                    "value": "0",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "image",
+                                    "type": "file",
+                                    "src": []
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/questions",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "questions"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Qualify User",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"user_email\": \"student@vitstudent.ac.in\",\n    \"domain\": \"WEB\",\n    \"status\": \"qualified\",\n    \"round\": 1\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/qualify",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "qualify"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Questions",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/questions?domain=WEB&round=1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "questions"
+                            ],
+                            "query": [
+                                {
+                                    "key": "domain",
+                                    "value": "WEB"
+                                },
+                                {
+                                    "key": "round",
+                                    "value": "1"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Search User",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/search?email=student@vitstudent.ac.in",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "search"
+                            ],
+                            "query": [
+                                {
+                                    "key": "email",
+                                    "value": "student@vitstudent.ac.in"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Delete Responses",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/delete-responses?email=test@vitstudent.ac.in",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "delete-responses"
+                            ],
+                            "query": [
+                                {
+                                    "key": "email",
+                                    "value": "test@vitstudent.ac.in"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Create Slot",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"domain\": \"WEB\",\n    \"date\": \"2025-01-20\",\n    \"startTime\": \"10:00\",\n    \"endTime\": \"10:20\",\n    \"panel\": 1\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/create-slot",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "create-slot"
+                            ]
+                        },
+                        "description": "Creates a new interview slot."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Domain",
+            "item": [
+                {
+                    "name": "Submit Domains",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"Technical\": [\"WEB\", \"APP\"],\n    \"Design\": [\"UI/UX\"]\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/domain/submit",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "domain",
+                                "submit"
+                            ]
+                        },
+                        "description": "Registers the user for specific domains."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Questions",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/domain/questions?domain=WEB&round=1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "domain",
+                                "questions"
+                            ],
+                            "query": [
+                                {
+                                    "key": "domain",
+                                    "value": "WEB"
+                                },
+                                {
+                                    "key": "round",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Fetches questions for a specific domain and round."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Answer",
+            "item": [
+                {
+                    "name": "Submit Answers",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"domain\": \"WEB\",\n    \"answers\": [\"Answer 1\", \"Answer 2\"],\n    \"round\": 1\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/answer/submit",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "answer",
+                                "submit"
+                            ]
+                        },
+                        "description": "Submits answers for a specific domain and round."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Slots",
+            "item": [
+                {
+                    "name": "Get Slots",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/slots/get-slots",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "slots",
+                                "get-slots"
+                            ]
+                        },
+                        "description": "Fetches available interview slots."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Post Slot",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"iid\": \"WEB_2025-01-20_10:00_P1\",\n    \"time_slot\": \"10:00 - 10:20\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/slots/post-slots",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "slots",
+                                "post-slots"
+                            ]
+                        },
+                        "description": "Books a specific interview slot."
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ]
+}

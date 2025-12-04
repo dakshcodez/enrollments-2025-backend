@@ -26,11 +26,11 @@ domain_mapping = {
     "VIDEO EDITING": "video",
     'EVENTS':'events',
     'PNM':'pnm',
-    # 'WEB':'web',
-    'IOT':'iot',
+    'WEB':'web',
+    # 'IOT':'iot',
     'APP':'app',
     'AI/ML':'ai',
-    'RND':'rnd',
+    # 'RND':'rnd',
     "CC": "cc",
     "FRONTEND":"web",
     "BACKEND":"web",
@@ -53,12 +53,12 @@ async def post_answers(answerReq: AnswerStruct, idToken: str = Depends(get_acces
         if not user:
             return JSONResponse(status_code=404, content="User not found.")
 
-        # flat_domains = list(chain.from_iterable(user.get("domain", []).values()))
-        # if answerReq.domain not in flat_domains:
-        #     return JSONResponse(status_code=408, content="Domain was not selected")
+        flat_domains = list(chain.from_iterable(user.get("domain", []).values()))
+        if answerReq.domain not in flat_domains:
+            return JSONResponse(status_code=408, content="Domain was not selected")
         mapped_domain = domain_mapping.get(answerReq.domain)
-        if answerReq.domain in ["GRAPHIC DESIGN", "CC", "AI/ML", "UI/UX", "VIDEO EDITING"]:
-            raise HTTPException(status_code=401, detail=f"Deadline for '{answerReq.domain}' is over.")
+        # if answerReq.domain in ["GRAPHIC DESIGN", "CC", "AI/ML", "UI/UX", "VIDEO EDITING"]:
+        #     raise HTTPException(status_code=401, detail=f"Deadline for '{answerReq.domain}' is over.")
         
         domain_tables = resources['domain_tables']
         domain_table = domain_tables.get(mapped_domain)
@@ -73,17 +73,18 @@ async def post_answers(answerReq: AnswerStruct, idToken: str = Depends(get_acces
         response = domain_table.get_item(Key={'email': email})
         domain_response = response.get('Item')
 
-        # if answerReq.round == 1:
-        #     if 'Item' in response:
-        #         return JSONResponse(status_code=409, content="Answers already submitted")
+        if answerReq.round == 1:
+            if 'Item' in response:
+                return JSONResponse(status_code=409, content="Answers already submitted")
 
-        #     domain_table.put_item(
-        #         Item={
-        #             "email": email,
-        #             f"round{answerReq.round}": answers_dict,
-        #             f"score{answerReq.round}": answerReq.score
-        #         }
-        #     )
+            domain_table.put_item(
+                Item={
+                    "email": email,
+                    # f"round{answerReq.round}": answers_dict,
+                    # f"score{answerReq.round}": answerReq.score
+                    "round1": answerReq.answers
+                }
+            )
         if answerReq.round == 2:
             # if not domain_response.get("round1"):
             #     return JSONResponse(status_code=201, content=f"Did not attempt round 1")

@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-# from routes.domain import domain_app
+from routes.domain import domain_app
 from routes.user import user
-# from routes.answer import ans_app
-# from routes.slots import slot_app
+from routes.answer import ans_app
+from routes.slots import slot_app
 from routes.admin import admin_app
 from fastapi.responses import FileResponse
 import os
@@ -39,6 +39,6 @@ def get_favicon():
 
 app.mount("/user", user)
 app.mount("/admin", admin_app)
-# app.mount("/domain", domain_app)
-# app.mount("/answer", ans_app)
-# app.mount("/slots", slot_app)
+app.mount("/domain", domain_app)
+app.mount("/answer", ans_app)
+app.mount("/slots", slot_app)

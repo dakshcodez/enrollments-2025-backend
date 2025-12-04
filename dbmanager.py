@@ -11,9 +11,9 @@ class DynamoDBManager:
         load_dotenv()
         self.dynamodb = boto3.resource(
             'dynamodb',
-            region_name=getenv('AWS_REGION'),
-            aws_access_key_id=getenv('AWS_ACCESS_KEY'),
-            aws_secret_access_key=getenv('AWS_SECRET_KEY')
+            region_name=getenv('MY_AWS_REGION'),
+            aws_access_key_id=getenv('MY_AWS_ACCESS_KEY'),
+            aws_secret_access_key=getenv('MY_AWS_SECRET_KEY')
         )
 
         self.table_configs = {
