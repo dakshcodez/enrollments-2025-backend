@@ -26,6 +26,7 @@ async def login(authorization: str = Depends(get_access_token), resources: dict 
             raise HTTPException(status_code=401, detail=f"Invalid token: {str(token_error)}")
 
         email = decoded_token.get('email')
+
         if not email:
             raise HTTPException(status_code=400, detail="Email not found in ID token")
 
@@ -38,7 +39,14 @@ async def login(authorization: str = Depends(get_access_token), resources: dict 
             raise HTTPException(status_code=500, detail=f"Database lookup failed: {str(db_error)}")
 
         if user is None:
-            return JSONResponse(content={"message": "User not registered on VTOP"}, status_code=204)
+            # return JSONResponse(content={"message": "User not registered on VTOP"}, status_code=204)
+            if not email.endswith('@vitstudent.ac.in'):
+                return JSONResponse(status_code=403, content="User not registered on VTOP")
+
+            name = decoded_token.get('name', '')
+            
+            user_table.put_item(Item={ 'uid' : email, 'name' : name})
+            return JSONResponse(status_code=200, content="new user registered successfully")
 
         if 'username' not in user:
             return JSONResponse(status_code=201, content="Logged In Successfully")
