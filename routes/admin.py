@@ -68,13 +68,103 @@ async def verify_admin(authorization: str, required_domain: str = None):
                     content={"detail": "Access denied: No permission for this domain"}
                 )
 
-        return email
+        return admin
 
     except Exception as e:
         return JSONResponse(
             status_code=401,
             content={"detail": f"Authentication failed: {str(e)}"}
         )
+
+def is_head_admin(admin: dict) -> bool:
+    return admin.get('role') == 'head-admin'
+
+class AddSubAdminRequest(BaseModel):
+    email:str
+    allowed_domains: List[str]
+
+@admin_app.post('/add-sub-admin')
+async def add_sub_admin(
+    request: AddSubAdminRequest,
+    authorization: str = Depends(get_access_token)
+):
+    try:
+        admin_result = await verify_admin(authorization)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        if not is_head_admin(admin_result):
+            raise HTTPException(status_code=403, detail="Access denied: Not a head admin")
+
+        requester_domains = set(admin_result.get('allowed_domains', []))
+        requested_domains = set(request.allowed_domains)
+    
+        if not requested_domains.issubset(requester_domains):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "You can only assign domains you have access to"}
+            )
+        
+        sub_admin_response = admin_table.get_item(Key={'email': request.email})
+        sub_admin = sub_admin_response.get('Item')
+        
+        if sub_admin:
+            raise HTTPException(status_code=400, detail="Sub admin already exists")
+        
+        admin_table.put_item(
+            Item={
+                'email': request.email,
+                'role': 'sub-admin',
+                'allowed_domains': request.allowed_domains,
+                'created-by': admin_result['email'] 
+            }
+        )
+        
+        return JSONResponse(status_code=200, content={"detail": "Sub admin added successfully"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+@admin_app.get("/list-sub-admins")
+async def list_sub_admins(authorization: str = Depends(get_access_token)):
+    admin = await verify_admin(authorization)
+    if isinstance(admin, JSONResponse):
+        return admin
+    
+    if not is_head_admin(admin):
+        return JSONResponse(status_code=403, content={"detail": "Only head-admins can list sub-admins"})
+    
+    # Scan for sub-admins created by this head-admin
+    response = admin_table.scan(
+        FilterExpression=Attr('created-by').eq(admin['email'])
+    )
+    
+    return {"sub_admins": response.get('Items', [])}
+
+@admin_app.delete("/remove-sub-admin")
+async def remove_sub_admin(
+    email: str,
+    authorization: str = Depends(get_access_token)
+):
+    admin = await verify_admin(authorization)
+    if isinstance(admin, JSONResponse):
+        return admin
+    
+    if not is_head_admin(admin):
+        return JSONResponse(status_code=403, content={"detail": "Only head-admins can remove sub-admins"})
+    
+    # Get the sub-admin to verify they were created by this head-admin
+    sub_admin_response = admin_table.get_item(Key={'email': email})
+    sub_admin = sub_admin_response.get('Item')
+    
+    if not sub_admin:
+        return JSONResponse(status_code=404, content={"detail": "Sub-admin not found"})
+    
+    if sub_admin.get('created-by') != admin['email']:
+        return JSONResponse(status_code=403, content={"detail": "You can only remove sub-admins you created"})
+    
+    admin_table.delete_item(Key={'email': email})
+    
+    return JSONResponse(status_code=200, content={"detail": "Sub-admin removed successfully"})
 
 @admin_app.get('/fetch')
 async def fetch_domains(
@@ -299,9 +389,11 @@ async def mark_qualification(request: QualificationRequest, authorization: str =
         #         content={"detail": "Round 1 evaluations are closed'."}
         #     )
 
-        email = await verify_admin(authorization, request.domain)
-        if isinstance(email, JSONResponse):
-            return email
+        admin_result = await verify_admin(authorization, request.domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        email = admin_result['email']
 
         mapped_domain = DOMAIN_MAPPING.get(request.domain)
         if not mapped_domain:
@@ -466,9 +558,9 @@ class SlotRequest(BaseModel):
 
 @admin_app.post("/create-slot")
 async def create_slot(slot_request: SlotRequest, authorization: str = Depends(get_access_token)):
-    email = await verify_admin(authorization, slot_request.domain)
-    if isinstance(email, JSONResponse):
-        return email
+    admin_result = await verify_admin(authorization, slot_request.domain)
+    if isinstance(admin_result, JSONResponse):
+        return admin_result
 
     # Create unique ID: DOMAIN_DATE_START_PANEL
     slot_id = f"{slot_request.domain}_{slot_request.date}_{slot_request.startTime}_P{slot_request.panel}"
