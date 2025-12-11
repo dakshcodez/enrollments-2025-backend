@@ -336,6 +336,51 @@
                     "response": []
                 },
                 {
+                    "name": "Delete Question",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/delete-question?domain=WEB&round=1&question_type=mcq&question_text=What is HTML?",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "delete-question"
+                            ],
+                            "query": [
+                                {
+                                    "key": "domain",
+                                    "value": "WEB"
+                                },
+                                {
+                                    "key": "round",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "question_type",
+                                    "value": "mcq",
+                                    "description": "mcq or desc"
+                                },
+                                {
+                                    "key": "question_text",
+                                    "value": "What is HTML?",
+                                    "description": "Exact question text to delete"
+                                }
+                            ]
+                        },
+                        "description": "Delete a question by matching its exact text. Admin must have permission for the domain."
+                    },
+                    "response": []
+                },
+                {
                     "name": "Search User",
                     "request": {
                         "method": "GET",

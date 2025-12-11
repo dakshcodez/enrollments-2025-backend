@@ -820,3 +820,53 @@ async def get_available_slots(
         
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Error fetching available slots: {str(e)}"})
+
+
+@admin_app.delete('/delete-question')
+async def delete_question(
+    domain: str = Query(...),
+    round: int = Query(...),
+    question_type: str = Query(...),
+    question_text: str = Query(..., description="Exact question text to delete"),
+    authorization: str = Depends(get_access_token)
+):
+    try:
+        admin_result = await verify_admin(authorization, domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        quiz_table = resources['quiz_table']
+        
+        # Get current questions
+        response = quiz_table.get_item(Key={'qid': domain})
+        item = response.get('Item', {})
+        
+        field_name = f"{question_type}{round}"
+        questions = item.get(field_name, [])
+        
+        # Find and remove question by text
+        found = False
+        for i, q in enumerate(questions):
+            if q.get('question') == question_text:
+                questions.pop(i)
+                found = True
+                break
+        
+        if not found:
+            return JSONResponse(status_code=404, content={"detail": "Question not found"})
+        
+        # Update DynamoDB
+        quiz_table.update_item(
+            Key={'qid': domain},
+            UpdateExpression=f"SET {field_name} = :questions",
+            ExpressionAttributeValues={':questions': questions}
+        )
+        
+        return JSONResponse(
+            status_code=200,
+            content={"detail": "Question deleted successfully"}
+        )
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error deleting question: {str(e)}"})
+        
