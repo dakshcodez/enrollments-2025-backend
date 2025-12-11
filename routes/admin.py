@@ -13,9 +13,10 @@ import json
 from boto3.dynamodb.conditions import Attr
 from decimal import Decimal
 
-S3_BUCKET_NAME = os.getenv('MY_S3_BUCKET_NAME')
-if not S3_BUCKET_NAME:
-    raise ValueError("S3_BUCKET_NAME environment variable is not set")
+# Cloudflare R2 Bucket (S3-compatible)
+R2_BUCKET_NAME = os.getenv('MY_R2_BUCKET_NAME')
+if not R2_BUCKET_NAME:
+    raise ValueError("R2_BUCKET_NAME environment variable is not set")
 
 admin_app = FastAPI()
 
@@ -292,11 +293,18 @@ class AddRequest(BaseModel):
     question_data: QuestionData
 
 async def upload_to_s3(file: UploadFile, bucket_name: str) -> str:
+    # Debug logging
+    print(f"🔍 DEBUG: Bucket name = {bucket_name}")
+    print(f"🔍 DEBUG: R2 Endpoint = {os.getenv('MY_R2_ENDPOINT')}")
+    print(f"🔍 DEBUG: Access Key exists = {os.getenv('MY_R2_ACCESS_KEY') is not None}")
+    
+    # Cloudflare R2 client (S3-compatible)
     s3_client = boto3.client(
         's3',
-        aws_access_key_id=os.getenv("MY_AWS_ACCESS_KEY"),
-        aws_secret_access_key=os.getenv("MY_AWS_SECRET_KEY"),
-        region_name=os.getenv("MY_AWS_REGION")
+        endpoint_url=os.getenv("MY_R2_ENDPOINT"),  # R2 endpoint
+        aws_access_key_id=os.getenv("MY_R2_ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("MY_R2_SECRET_KEY"),
+        region_name='auto'  # R2 uses 'auto' for region
     )
 
     file_extension = file.filename.split('.')[-1]
@@ -311,7 +319,12 @@ async def upload_to_s3(file: UploadFile, bucket_name: str) -> str:
         }
     )
 
-    url = f"https://{bucket_name}.s3.amazonaws.com/{unique_filename}"
+    # Use R2 public URL (from R2.dev subdomain or custom domain)
+    r2_public_url = os.getenv("MY_R2_PUBLIC_URL")
+    if not r2_public_url:
+        raise ValueError("MY_R2_PUBLIC_URL environment variable is not set")
+    
+    url = f"{r2_public_url}/{unique_filename}"
     return url
 
 @admin_app.post('/questions')
@@ -338,7 +351,7 @@ async def add_question(
                 question_data_dict["correctIndex"] = int(correctIndex)
 
         if image:
-            image_url = await upload_to_s3(image, bucket_name=S3_BUCKET_NAME)
+            image_url = await upload_to_s3(image, bucket_name=R2_BUCKET_NAME)
             question_data_dict["image_url"] = image_url
 
         print(question_data_dict)
