@@ -23,19 +23,32 @@ admin_app = FastAPI()
 resources = initialize()
 admin_table = resources['admin_table']
 
+# Domain interview configuration
+DOMAIN_INTERVIEW_CONFIG = {
+    "WEB": {"rounds": 1, "type": "one-on-one"},
+    "APP": {"rounds": 1, "type": "one-on-one"},
+    "AI/ML": {"rounds": 1, "type": "one-on-one"},
+    "CC": {"rounds": 1, "type": "one-on-one"},
+    "UI/UX": {"rounds": 1, "type": "one-on-one"},
+    # "GRAPHIC DESIGN": {"rounds": 1, "type": "one-on-one"},
+    "VIDEO EDITING": {"rounds": 1, "type": "one-on-one"},
+    "EVENTS": {"rounds": 2, "type": "one-on-one-then-group"},
+    "PNM": {"rounds": 2, "type": "one-on-one-then-group"}
+}
+
 DOMAIN_MAPPING = {
     "UI/UX": "ui",
-    "GRAPHIC DESIGN": "graphic",
+    # "GRAPHIC DESIGN": "graphic",
     "VIDEO EDITING": "video",
     'EVENTS': 'events',
     'PNM': 'pnm',
     'WEB': 'web',
-    'IOT': 'iot',
+    # 'IOT': 'iot',
     'APP': 'app',
     'AI/ML': 'ai',
     'RND': 'rnd',
     'CC': 'cc',
-    "WEB":"web"
+    # "WEB":"web"
 }
 
 from fastapi import HTTPException
@@ -568,6 +581,8 @@ class SlotRequest(BaseModel):
     startTime: str
     endTime: str
     panel: int
+    interview_round: int = 1  # Default to round 1
+    max_capacity: int = 1     # Default to 1 (one-on-one)
 
 @admin_app.post("/create-slot")
 async def create_slot(slot_request: SlotRequest, authorization: str = Depends(get_access_token)):
@@ -575,23 +590,233 @@ async def create_slot(slot_request: SlotRequest, authorization: str = Depends(ge
     if isinstance(admin_result, JSONResponse):
         return admin_result
 
-    # Create unique ID: DOMAIN_DATE_START_PANEL
-    slot_id = f"{slot_request.domain}_{slot_request.date}_{slot_request.startTime}_P{slot_request.panel}"
+    # Create unique ID: DOMAIN_DATE_START_PANEL_ROUND
+    slot_id = f"{slot_request.domain}_{slot_request.date}_{slot_request.startTime}_P{slot_request.panel}_R{slot_request.interview_round}"
 
     interview_table = resources["interview_table"]
 
     try:
+        from datetime import datetime as dt
         interview_table.put_item(
             Item={
                 "iid": slot_id,
                 "domain": slot_request.domain,
                 "date": slot_request.date,
                 "time_slot": f"{slot_request.startTime} - {slot_request.endTime}",
-                "panel": slot_request.panel, 
-                "isBooked": False, 
-                "bookedBy": None
+                "panel": slot_request.panel,
+                "interview_round": slot_request.interview_round,
+                "max_capacity": slot_request.max_capacity,
+                "assigned_users": [],  # List of user emails
+                "assigned_by": None,
+                "assigned_at": None
             }
         )
-        return JSONResponse(status_code=200, content={"detail": f"Slot created successfully for Panel {slot_request.panel}"})
+        return JSONResponse(
+            status_code=200, 
+            content={
+                "detail": f"Slot created for Panel {slot_request.panel}, Round {slot_request.interview_round}",
+                "slot_id": slot_id,
+                "max_capacity": slot_request.max_capacity
+            }
+        )
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Error creating slot: {str(e)}"})
+
+
+# New endpoints for admin-controlled slot assignment
+
+@admin_app.get("/qualified-users")
+async def get_qualified_users(
+    domain: str = Query(...),
+    interview_round: int = Query(1),
+    authorization: str = Depends(get_access_token)
+):
+    """Get list of qualified users who need slot assignment for a specific domain and round"""
+    try:
+        admin_result = await verify_admin(authorization, domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        # Get domain-specific table
+        domain_mapping = {
+            "WEB": "web", "APP": "app", "AI/ML": "ai", "CC": "cc",
+            "UI/UX": "ui", "VIDEO EDITING": "video",
+            "EVENTS": "events", "PNM": "pnm"
+        }
+        
+        mapped_domain = domain_mapping.get(domain)
+        if not mapped_domain:
+            return JSONResponse(status_code=400, content={"detail": "Invalid domain"})
+        
+        # Get domain table from resources
+        domain_tables = resources['domain_tables']
+        domain_table = domain_tables.get(mapped_domain)
+        
+        if not domain_table:
+            return JSONResponse(status_code=400, content={"detail": f"Domain table not found for {domain}"})
+        
+        user_table = resources['user_table']
+        
+        # Scan domain table for qualified users
+        qualification_field = f"qualification_status{interview_round}"
+        response = domain_table.scan(
+            FilterExpression=Attr(qualification_field).eq("qualified")
+        )
+        
+        qualified_users = []
+        for item in response.get('Items', []):
+            user_email = item.get('email')
+            
+            # Get user details
+            user_response = user_table.get_item(Key={'uid': user_email})
+            user = user_response.get('Item', {})
+            
+            # Check if user already has slot for this round
+            interview_slots = user.get('interview_slots', {})
+            round_key = f"round{interview_round}"
+            has_slot = round_key in interview_slots and interview_slots[round_key] is not None
+            
+            qualified_users.append({
+                "email": user_email,
+                "name": user.get('name', 'N/A'),
+                f"has_slot_round{interview_round}": has_slot,
+                "qualification_status": item.get(qualification_field, "unmarked")
+            })
+        
+        return JSONResponse(status_code=200, content={"users": qualified_users})
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error fetching qualified users: {str(e)}"})
+
+
+class AssignSlotRequest(BaseModel):
+    slot_id: str
+    user_emails: List[str]
+    domain: str
+    interview_round: int
+
+
+@admin_app.post("/assign-slot")
+async def assign_slot(
+    request: AssignSlotRequest,
+    authorization: str = Depends(get_access_token)
+):
+    """Assign a slot to one or more users"""
+    try:
+        admin_result = await verify_admin(authorization, request.domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        admin_email = admin_result['email']
+        interview_table = resources['interview_table']
+        user_table = resources['user_table']
+        
+        # Get slot details
+        slot_response = interview_table.get_item(Key={'iid': request.slot_id})
+        slot = slot_response.get('Item')
+        
+        if not slot:
+            return JSONResponse(status_code=404, content={"detail": "Slot not found"})
+        
+        # Check capacity
+        current_assigned = slot.get('assigned_users', [])
+        max_capacity = slot.get('max_capacity', 1)
+        
+        if len(current_assigned) + len(request.user_emails) > max_capacity:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": f"Slot capacity exceeded. Max: {max_capacity}, Current: {len(current_assigned)}"}
+            )
+        
+        # Update slot with assigned users
+        from datetime import datetime as dt
+        updated_assigned_users = current_assigned + request.user_emails
+        
+        interview_table.update_item(
+            Key={'iid': request.slot_id},
+            UpdateExpression="SET assigned_users = :users, assigned_by = :admin, assigned_at = :time",
+            ExpressionAttributeValues={
+                ':users': updated_assigned_users,
+                ':admin': admin_email,
+                ':time': dt.utcnow().isoformat()
+            }
+        )
+        
+        # Update each user's record
+        round_key = f"round{request.interview_round}"
+        for user_email in request.user_emails:
+            user_response = user_table.get_item(Key={'uid': user_email})
+            user = user_response.get('Item')
+            
+            if not user:
+                continue
+            
+            # Initialize interview_slots if not exists
+            interview_slots = user.get('interview_slots', {})
+            interview_slots[round_key] = {
+                "iid": request.slot_id,
+                "time": slot.get('time_slot'),
+                "panel": slot.get('panel'),
+                "domain": request.domain,
+                "assigned_by": admin_email,
+                "assigned_at": dt.utcnow().isoformat()
+            }
+            
+            user_table.update_item(
+                Key={'uid': user_email},
+                UpdateExpression="SET interview_slots = :slots",
+                ExpressionAttributeValues={':slots': interview_slots}
+            )
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "detail": f"Successfully assigned {len(request.user_emails)} user(s) to slot",
+                "slot_id": request.slot_id,
+                "assigned_users": updated_assigned_users
+            }
+        )
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error assigning slot: {str(e)}"})
+
+
+@admin_app.get("/available-slots")
+async def get_available_slots(
+    domain: str = Query(...),
+    interview_round: int = Query(1),
+    authorization: str = Depends(get_access_token)
+):
+    """Get slots with available capacity for assignment"""
+    try:
+        admin_result = await verify_admin(authorization, domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        interview_table = resources['interview_table']
+        
+        # Scan for slots matching domain and round
+        response = interview_table.scan(
+            FilterExpression=Attr('domain').eq(domain) & Attr('interview_round').eq(interview_round)
+        )
+        
+        available_slots = []
+        for slot in response.get('Items', []):
+            assigned_users = slot.get('assigned_users', [])
+            max_capacity = slot.get('max_capacity', 1)
+            available_capacity = max_capacity - len(assigned_users)
+            
+            # Convert Decimal to int for JSON serialization
+            available_slots.append({
+                "iid": slot.get('iid'),
+                "time_slot": slot.get('time_slot'),
+                "panel": int(slot.get('panel', 0)),  # Convert Decimal to int
+                "assigned_users": assigned_users,
+                "max_capacity": int(max_capacity),  # Convert Decimal to int
+                "available_capacity": int(available_capacity)  # Convert Decimal to int
+            })
+        
+        return JSONResponse(status_code=200, content={"slots": available_slots})
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error fetching available slots: {str(e)}"})

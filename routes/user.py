@@ -129,7 +129,7 @@ SUBDOMAIN_MAPPING = {
     "PNM": "Management",
     "EVENTS": "Management",
     "UI/UX": "Design",
-    "GRAPHIC DESIGN": "Design",
+    # "GRAPHIC DESIGN": "Design",
     "VIDEO EDITING": "Design"
 }
 @user.get("/dashboard")

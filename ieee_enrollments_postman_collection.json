@@ -407,7 +407,7 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n    \"domain\": \"WEB\",\n    \"date\": \"2025-01-20\",\n    \"startTime\": \"10:00\",\n    \"endTime\": \"10:20\",\n    \"panel\": 1\n}"
+                            "raw": "{\n    \"domain\": \"WEB\",\n    \"date\": \"2025-01-20\",\n    \"startTime\": \"10:00\",\n    \"endTime\": \"10:20\",\n    \"panel\": 1,\n    \"interview_round\": 1,\n    \"max_capacity\": 1\n}"
                         },
                         "url": {
                             "raw": "{{baseUrl}}/admin/create-slot",
@@ -419,7 +419,201 @@
                                 "create-slot"
                             ]
                         },
-                        "description": "Creates a new interview slot."
+                        "description": "Creates a new interview slot with round and capacity settings."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Qualified Users",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/qualified-users?domain=WEB&interview_round=1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "qualified-users"
+                            ],
+                            "query": [
+                                {
+                                    "key": "domain",
+                                    "value": "WEB"
+                                },
+                                {
+                                    "key": "interview_round",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Get list of qualified users who need slot assignment for a specific domain and round."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Assign Slot",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"slot_id\": \"WEB_2025-01-20_10:00_P1_R1\",\n    \"user_emails\": [\"user@vitstudent.ac.in\"],\n    \"domain\": \"WEB\",\n    \"interview_round\": 1\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/assign-slot",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "assign-slot"
+                            ]
+                        },
+                        "description": "Assign a slot to one or more users. Validates capacity and updates both slot and user records."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Available Slots",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/available-slots?domain=WEB&interview_round=1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "available-slots"
+                            ],
+                            "query": [
+                                {
+                                    "key": "domain",
+                                    "value": "WEB"
+                                },
+                                {
+                                    "key": "interview_round",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Get slots with available capacity for assignment. Shows current assignments and remaining capacity."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Add Sub-Admin",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"subadmin@vitstudent.ac.in\",\n    \"allowed_domains\": [\"WEB\", \"APP\"]\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/add-sub-admin",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "add-sub-admin"
+                            ]
+                        },
+                        "description": "Head-admins can add sub-admins for specific domains. Only head-admins have this permission."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "List Sub-Admins",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/list-sub-admins",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "list-sub-admins"
+                            ]
+                        },
+                        "description": "Head-admins can view all sub-admins they created."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Remove Sub-Admin",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/remove-sub-admin?email=subadmin@vitstudent.ac.in",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "remove-sub-admin"
+                            ],
+                            "query": [
+                                {
+                                    "key": "email",
+                                    "value": "subadmin@vitstudent.ac.in"
+                                }
+                            ]
+                        },
+                        "description": "Head-admins can remove sub-admins they created."
                     },
                     "response": []
                 }
