@@ -46,7 +46,7 @@ async def get_slots(idToken: str = Depends(get_access_token), resources: dict = 
                             "round": round_key,
                             "iid": slot_data.get('iid'),
                             "time": slot_data.get('time'),
-                            "panel": slot_data.get('panel'),
+                            "panel": int(slot_data.get('panel')) if slot_data.get('panel') is not None else None,
                             "domain": slot_data.get('domain'),
                             "assigned_at": slot_data.get('assigned_at')
                         })

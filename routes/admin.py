@@ -355,7 +355,10 @@ async def add_question(
         if isinstance(admin_result, JSONResponse):
             return admin_result
         quiz_table = resources['quiz_table']
-        question_data_dict = {"question": question}
+        question_data_dict = {
+            "id": str(uuid.uuid4()),
+            "question": question
+        }
 
         if options:
             options = json.loads(options[0])
@@ -497,6 +500,7 @@ async def get_qs(domain: str, round: str, authorization: str = Depends(get_acces
 
         formatted_mcq = [
             {
+                "id": int(q.get("id")) if isinstance(q.get("id"), Decimal) else q.get("id"),
                 "question": q["question"],
                 "options": q["options"],
                 "correctIndex": int(q["correctIndex"]),
@@ -507,6 +511,7 @@ async def get_qs(domain: str, round: str, authorization: str = Depends(get_acces
 
         formatted_desc = [
             {
+                "id": int(q.get("id")) if isinstance(q.get("id"), Decimal) else q.get("id"),
                 "question": q["question"],
                 **({"image_url": str(q["image_url"])} if "image_url" in q else {})
             }
