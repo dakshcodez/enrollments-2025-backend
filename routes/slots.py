@@ -35,18 +35,21 @@ async def get_slots(idToken: str = Depends(get_access_token), resources: dict = 
         if not interview_slots:
             return {"message": "No slots assigned yet", "slots": []}
         
-        # Format slots for response
+        # Format slots for response - expects clean nested structure: round -> domain -> slot
         assigned_slots = []
-        for round_key, slot_data in interview_slots.items():
-            if slot_data:
-                assigned_slots.append({
-                    "round": round_key,
-                    "iid": slot_data.get('iid'),
-                    "time": slot_data.get('time'),
-                    "panel": slot_data.get('panel'),
-                    "domain": slot_data.get('domain'),
-                    "assigned_at": slot_data.get('assigned_at')
-                })
+        for round_key, round_data in interview_slots.items():
+            if round_data and isinstance(round_data, dict):
+                # Iterate through domains in this round
+                for domain, slot_data in round_data.items():
+                    if slot_data and isinstance(slot_data, dict):
+                        assigned_slots.append({
+                            "round": round_key,
+                            "iid": slot_data.get('iid'),
+                            "time": slot_data.get('time'),
+                            "panel": slot_data.get('panel'),
+                            "domain": slot_data.get('domain'),
+                            "assigned_at": slot_data.get('assigned_at')
+                        })
         
         return {"message": "Slots fetched successfully", "slots": assigned_slots}
 

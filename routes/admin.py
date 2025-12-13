@@ -547,7 +547,7 @@ def remove_round1_attribute(email: str):
 
 @admin_app.post("/delete-responses")
 def delete_email(email: str):
-    emails = ["aniruddha.neema2023@vitstudent.ac.in","shubham.prasad2023@vitstudent.ac.in","medhansh.jain2022a@vitstudent.ac.in"]
+    emails = ["aniruddha.neema2023@vitstudent.ac.in","shubham.prasad2023@vitstudent.ac.in","medhansh.jain2022a@vitstudent.ac.in", "harshavardhan.kang2024@vitstudent.ac.in"]
     if email not in emails:
         return {"message":"you cannot delete responses"}
     results = [delete_email_entries(table, email) for table in resources["domain_tables"].keys()]
