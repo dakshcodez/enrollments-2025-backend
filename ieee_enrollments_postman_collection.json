@@ -661,6 +661,72 @@
                         "description": "Head-admins can remove sub-admins they created."
                     },
                     "response": []
+                },
+                {
+                    "name": "Delete Slot",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/delete-slot?slot_id=WEB_2025-01-20_10:00_P1_R1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "delete-slot"
+                            ],
+                            "query": [
+                                {
+                                    "key": "slot_id",
+                                    "value": "WEB_2025-01-20_10:00_P1_R1",
+                                    "description": "ID of the slot to delete"
+                                }
+                            ]
+                        },
+                        "description": "Delete an interview slot. Only allowed if no users are assigned."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Unassign Slot",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"user_email\": \"student@vitstudent.ac.in\",\n    \"slot_id\": \"WEB_2025-01-20_10:00_P1_R1\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/unassign-slot",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "unassign-slot"
+                            ]
+                        },
+                        "description": "Unassign a user from an interview slot."
+                    },
+                    "response": []
                 }
             ]
         },
@@ -784,7 +850,13 @@
                     "name": "Get Slots",
                     "request": {
                         "method": "GET",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{baseUrl}}/slots/get-slots",
                             "host": [
@@ -796,40 +868,6 @@
                             ]
                         },
                         "description": "Fetches available interview slots."
-                    },
-                    "response": []
-                },
-                {
-                    "name": "Post Slot",
-                    "request": {
-                        "method": "POST",
-                        "header": [
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{authToken}}",
-                                "type": "text"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json",
-                                "type": "text"
-                            }
-                        ],
-                        "body": {
-                            "mode": "raw",
-                            "raw": "{\n    \"iid\": \"WEB_2025-01-20_10:00_P1\",\n    \"time_slot\": \"10:00 - 10:20\"\n}"
-                        },
-                        "url": {
-                            "raw": "{{baseUrl}}/slots/post-slots",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "slots",
-                                "post-slots"
-                            ]
-                        },
-                        "description": "Books a specific interview slot."
                     },
                     "response": []
                 }

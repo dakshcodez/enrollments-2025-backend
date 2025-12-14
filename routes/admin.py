@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, File, UploadFile, Form, Query
 from middleware.verifyToken import get_access_token
 from config import initialize
+from botocore.exceptions import ClientError
 from fastapi.responses import JSONResponse
 from firebase_admin import auth
 from typing import Optional, List
@@ -628,6 +629,128 @@ async def create_slot(slot_request: SlotRequest, authorization: str = Depends(ge
         return JSONResponse(status_code=500, content={"detail": f"Error creating slot: {str(e)}"})
 
 
+@admin_app.delete("/delete-slot")
+async def delete_slot(slot_id: str = Query(..., description="ID of the slot to delete"), authorization: str = Depends(get_access_token)):
+    """Delete an interview slot. Only allowed if no users are assigned."""
+    try:
+        # Extract domain from slot_id (Format: DOMAIN_DATE_START_PANEL_ROUND)
+        try:
+            domain = slot_id.split('_')[0]
+        except IndexError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid slot ID format"})
+
+        admin_result = await verify_admin(authorization, domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+
+        interview_table = resources["interview_table"]
+        
+        # Check if slot exists and has assigned users
+        response = interview_table.get_item(Key={'iid': slot_id})
+        slot = response.get('Item')
+        
+        if not slot:
+            return JSONResponse(status_code=404, content={"detail": "Slot not found"})
+            
+        assigned_users = slot.get('assigned_users', [])
+        if assigned_users:
+            return JSONResponse(
+                status_code=409, 
+                content={
+                    "detail": f"Cannot delete slot. {len(assigned_users)} user(s) are already assigned.",
+                    "assigned_users": assigned_users
+                }
+            )
+
+        # Delete the slot
+        interview_table.delete_item(Key={'iid': slot_id})
+        
+        return JSONResponse(
+            status_code=200,
+            content={"detail": f"Slot {slot_id} deleted successfully"}
+        )
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error deleting slot: {str(e)}"})
+
+
+class UnassignSlotRequest(BaseModel):
+    user_email: str
+    slot_id: str
+
+@admin_app.post("/unassign-slot")
+async def unassign_slot(request: UnassignSlotRequest, authorization: str = Depends(get_access_token)):
+    """Unassign a user from an interview slot"""
+    try:
+        # Extract domain from slot_id
+        try:
+            domain = request.slot_id.split('_')[0]
+            round_num = request.slot_id.split('_')[-1].replace('R', '') # Extract round number
+            round_key = f"round{round_num}"
+        except IndexError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid slot ID format"})
+
+        admin_result = await verify_admin(authorization, domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+
+        user_table = resources['user_table']
+        interview_table = resources['interview_table']
+
+        # 1. Remove user from slot's assigned_users list
+        # Since assigned_users is a List (L), we cannot use DELETE in UpdateExpression easily to remove by value.
+        # We must fetch, modify, and update.
+        response = interview_table.get_item(Key={'iid': request.slot_id})
+        slot = response.get('Item')
+
+        if not slot:
+            return JSONResponse(status_code=404, content={"detail": "Slot not found"})
+
+        assigned_users = slot.get('assigned_users', [])
+        if request.user_email in assigned_users:
+            assigned_users.remove(request.user_email)
+            
+            interview_table.update_item(
+                Key={'iid': request.slot_id},
+                UpdateExpression="SET assigned_users = :u",
+                ExpressionAttributeValues={':u': assigned_users}
+            )
+        else:
+             # User wasn't in the list, but we proceed to ensure they are removed from user_table too
+             pass
+
+        # 2. Remove slot from user's interview_slots
+        # We need to fetch, modify, and put because removing a nested key in DynamoDB 
+        # is tricky with UpdateExpression if the key might not exist
+        response = user_table.get_item(Key={'uid': request.user_email})
+        user = response.get('Item')
+
+        if user:
+            interview_slots = user.get('interview_slots', {})
+            if round_key in interview_slots and domain in interview_slots[round_key]:
+                # Check if the slot ID matches before deleting (safety check)
+                if interview_slots[round_key][domain].get('iid') == request.slot_id:
+                    del interview_slots[round_key][domain]
+                    
+                    # Clean up empty round dict if needed
+                    if not interview_slots[round_key]:
+                        del interview_slots[round_key]
+
+                    user_table.update_item(
+                        Key={'uid': request.user_email},
+                        UpdateExpression="SET interview_slots = :slots",
+                        ExpressionAttributeValues={':slots': interview_slots}
+                    )
+
+        return JSONResponse(
+            status_code=200,
+            content={"detail": f"User {request.user_email} unassigned from slot {request.slot_id}"}
+        )
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error unassigning slot: {str(e)}"})
+
+
 # New endpoints for admin-controlled slot assignment
 
 @admin_app.get("/qualified-users")
@@ -758,7 +881,13 @@ async def assign_slot(
             
             # Initialize interview_slots if not exists
             interview_slots = user.get('interview_slots', {})
-            interview_slots[round_key] = {
+            
+            # Ensure round_key exists and is a dict (handle potential legacy data or new init)
+            if round_key not in interview_slots or not isinstance(interview_slots[round_key], dict):
+                interview_slots[round_key] = {}
+
+            # Assign slot to DOMAIN key within round
+            interview_slots[round_key][request.domain] = {
                 "iid": request.slot_id,
                 "time": slot.get('time_slot'),
                 "panel": slot.get('panel'),
