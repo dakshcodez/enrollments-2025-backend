@@ -802,7 +802,10 @@ async def get_qualified_users(
             # Check if user already has slot for this round
             interview_slots = user.get('interview_slots', {})
             round_key = f"round{interview_round}"
-            has_slot = round_key in interview_slots and interview_slots[round_key] is not None
+            # Check if user already has a slot for THIS domain in this round
+            has_slot = False
+            if round_key in interview_slots and isinstance(interview_slots[round_key], dict):
+                has_slot = domain in interview_slots[round_key]
             
             qualified_users.append({
                 "email": user_email,
@@ -1003,4 +1006,4 @@ async def delete_question(
         
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Error deleting question: {str(e)}"})
-        
+    

@@ -61,3 +61,6 @@ usersTesting.csv
 head-admin.csv
 debug_user_slots.py
 wipe_slots.py
+routes/admin-getallsuer.py
+head-admin copy.csv
+userTesting.csv
