@@ -15,9 +15,13 @@ user_table = resources['user_table']
 firebase_app = resources['firebase_app']
 
 
+class AnswerItem(BaseModel):
+    questionId: str
+    answer: str
+
 class AnswerStruct(BaseModel):
     domain: str = Field(...)
-    answers: List[str] = Field(...)
+    answers: List[AnswerItem] = Field(...)
     round: int
 
 domain_mapping = {
@@ -73,6 +77,9 @@ async def post_answers(answerReq: AnswerStruct, idToken: str = Depends(get_acces
         response = domain_table.get_item(Key={'email': email})
         domain_response = response.get('Item')
 
+        # Convert Pydantic models to dict for DynamoDB
+        answers_data = [item.dict() for item in answerReq.answers]
+
         if answerReq.round == 1:
             if 'Item' in response:
                 return JSONResponse(status_code=409, content="Answers already submitted")
@@ -82,7 +89,7 @@ async def post_answers(answerReq: AnswerStruct, idToken: str = Depends(get_acces
                     "email": email,
                     # f"round{answerReq.round}": answers_dict,
                     # f"score{answerReq.round}": answerReq.score
-                    "round1": answerReq.answers
+                    "round1": answers_data
                 }
             )
         if answerReq.round == 2:
@@ -103,7 +110,7 @@ async def post_answers(answerReq: AnswerStruct, idToken: str = Depends(get_acces
             domain_table.update_item(
                 Key={"email": email},
                 UpdateExpression=f"SET {name} = :answers",
-                ExpressionAttributeValues={":answers": answerReq.answers}
+                ExpressionAttributeValues={":answers": answers_data}
             )
 
         existing_rounds = user.get(f"round{answerReq.round}", [])

@@ -3,7 +3,7 @@ import os
 from botocore.exceptions import ClientError
 from config import get_resources   # assuming this file is config.py
 
-CSV_PATH = "head-admin copy.csv"   # path to your CSV
+CSV_PATH = "usersReal.csv"   # path to your CSV
 
 def seed_users_from_csv(csv_path):
     resources = get_resources()

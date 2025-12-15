@@ -825,7 +825,7 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n    \"domain\": \"WEB\",\n    \"answers\": [\"Answer 1\", \"Answer 2\"],\n    \"round\": 1\n}"
+                            "raw": "{\n    \"domain\": \"WEB\",\n    \"answers\": [\n        {\n            \"questionId\": \"31c0f450-07ff-4008-a045-d31e19428083\",\n            \"answer\": \"Answer 1\"\n        }\n    ],\n    \"round\": 1\n}"
                         },
                         "url": {
                             "raw": "{{baseUrl}}/answer/submit",
