@@ -964,7 +964,7 @@ async def delete_question(
     domain: str = Query(...),
     round: int = Query(...),
     question_type: str = Query(...),
-    question_text: str = Query(..., description="Exact question text to delete"),
+    question_id: str = Query(..., description="ID of the question to delete"),
     authorization: str = Depends(get_access_token)
 ):
     try:
@@ -981,10 +981,11 @@ async def delete_question(
         field_name = f"{question_type}{round}"
         questions = item.get(field_name, [])
         
-        # Find and remove question by text
+        # Find and remove question by ID
         found = False
         for i, q in enumerate(questions):
-            if q.get('question') == question_text:
+            # Convert both to string to be safe (DynamoDB might store as Decimal if it was int)
+            if str(q.get('id')) == str(question_id):
                 questions.pop(i)
                 found = True
                 break
