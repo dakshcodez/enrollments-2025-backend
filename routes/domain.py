@@ -95,6 +95,9 @@ async def get_qs(domain: str, round: str, id_token: str = Depends(get_access_tok
         for q in selected_mcq + selected_desc:
             question_data = {"question": q["question"]}
 
+            if "id" in q:
+                question_data["id"] = str(q["id"])
+
             if "options" in q:
                 question_data["options"] = q["options"]
 
