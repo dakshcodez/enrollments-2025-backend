@@ -15,6 +15,17 @@ resources = initialize()
 user_table = resources['user_table']
 quiz_table = resources['quiz_table']
 
+DOMAIN_QUESTION_CONFIG = {
+    "WEB": [5, 2],
+    "APP": [5, 2],
+    "AI/ML": [5, 2],
+    "CC": [5, 2],
+    "UI/UX": [5, 2],
+    "VIDEO": [5, 2],
+    "EVENTS": [5, 2],
+    "PNM": [5, 2]
+}
+
 @domain_app.post('/submit')
 async def post_domain(domain: Dict[str, List[str]], id_token: str = Depends(get_access_token)):
     try:
@@ -68,14 +79,17 @@ async def get_qs(domain: str, round: str, id_token: str = Depends(get_access_tok
         if not secret_key:
             raise HTTPException(status_code=500, detail="Secret key not found in environment variables")
 
-        selected_mcq = random.sample(mcq_data, min(7, len(mcq_data)))
+        # Get configuration for the domain, default to [7, 3] if not found
+        # Format: [num_mcq, num_desc]
+        counts = DOMAIN_QUESTION_CONFIG.get(domain, [7, 3]) 
+        target_mcq_count = counts[0]
+        target_desc_count = counts[1]
 
-        selected_desc = desc_data[:3] if len(desc_data) >= 3 else desc_data
-        remaining_mcq_needed = 3 - len(selected_desc)
+        # Select MCQs
+        selected_mcq = random.sample(mcq_data, min(target_mcq_count, len(mcq_data)))
 
-        if remaining_mcq_needed > 0:
-            extra_mcqs = [q for q in mcq_data if q not in selected_mcq]
-            selected_mcq += random.sample(extra_mcqs, min(remaining_mcq_needed, len(extra_mcqs)))
+        # Select Descriptive
+        selected_desc = random.sample(desc_data, min(target_desc_count, len(desc_data)))
 
         formatted_questions = []
         for q in selected_mcq + selected_desc:
