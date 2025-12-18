@@ -16,14 +16,14 @@ user_table = resources['user_table']
 quiz_table = resources['quiz_table']
 
 DOMAIN_QUESTION_CONFIG = {
-    "WEB": [5, 2],
-    "APP": [5, 2],
-    "AI/ML": [5, 2],
-    "CC": [5, 2],
-    "UI/UX": [5, 2],
-    "VIDEO": [5, 2],
-    "EVENTS": [5, 2],
-    "PNM": [5, 2]
+    "WEB": [12,0],
+    "APP": [12,0],
+    "AI/ML": [12,0],
+    "CC": [12,0],
+    "UI/UX": [5, 5],
+    "VIDEO": [5, 5],
+    "EVENTS": [9, 5],
+    "PNM": [12, 3]
 }
 
 @domain_app.post('/submit')
