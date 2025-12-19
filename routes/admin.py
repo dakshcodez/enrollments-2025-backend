@@ -13,6 +13,7 @@ import boto3
 import json
 from boto3.dynamodb.conditions import Attr
 from decimal import Decimal
+import traceback
 
 # Cloudflare R2 Bucket (S3-compatible)
 R2_BUCKET_NAME = os.getenv('MY_R2_BUCKET_NAME')
@@ -531,36 +532,149 @@ async def get_qs(domain: str, round: str, authorization: str = Depends(get_acces
 round_table = resources["user_table"]
 
 def delete_email_entries(table_name: str, email: str):
-    table = resources["domain_tables"].get(table_name)
-    if not table:
-        return f"Table {table_name} not found."
+    try:
+        print(f"🔍 DEBUG: Attempting to delete from table: {table_name}")
+        table = resources["domain_tables"].get(table_name)
+        if not table:
+            error_msg = f"Table {table_name} not found."
+            print(f"❌ ERROR: {error_msg}")
+            return error_msg
 
-    response = table.get_item(Key={"email": email})
-    if "Item" in response:
-        table.delete_item(Key={"email": email})
-        return f"Deleted {email} from {table_name}"
-    return f"Email {email} not found in {table_name}"
+        print(f"🔍 DEBUG: Getting item for email: {email} from {table_name}")
+        response = table.get_item(Key={"email": email})
+        
+        if "Item" in response:
+            print(f"🔍 DEBUG: Item found, deleting from {table_name}")
+            table.delete_item(Key={"email": email})
+            success_msg = f"✅ Deleted {email} from {table_name}"
+            print(success_msg)
+            return success_msg
+        
+        not_found_msg = f"⚠️ Email {email} not found in {table_name}"
+        print(not_found_msg)
+        return not_found_msg
+        
+    except ClientError as e:
+        # Handle AWS-specific errors
+        if e.response['Error']['Code'] == 'ResourceNotFoundException':
+            error_msg = f"⚠️ Table 'domain-{table_name}' does not exist in DynamoDB (skipping)"
+            print(error_msg)
+            return error_msg
+        else:
+            error_msg = f"❌ AWS ClientError in delete_email_entries({table_name}): {str(e)}"
+            print(error_msg)
+            traceback.print_exc()
+            return error_msg
+    except Exception as e:
+        error_msg = f"❌ EXCEPTION in delete_email_entries({table_name}): {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return error_msg
 
 def remove_round1_attribute(email: str):
-    response = round_table.get_item(Key={"uid": email})
-    if "Item" in response:
-        round_table.update_item(
-            Key={"uid": email},
-            UpdateExpression="REMOVE round1"
-        )
-        return f"Removed 'round1' from {email}"
-    return f"Uid {email} not found in round table"
+    try:
+        print(f"🔍 DEBUG: Attempting to remove round1 attribute for: {email}")
+        response = round_table.get_item(Key={"uid": email})
+        
+        if "Item" in response:
+            print(f"🔍 DEBUG: User found, checking if round1 exists")
+            user_item = response["Item"]
+            
+            # Check if round1 actually exists before trying to remove it
+            if "round1" not in user_item:
+                msg = f"⚠️ round1 attribute doesn't exist for {email}"
+                print(msg)
+                return msg
+            
+            print(f"🔍 DEBUG: Removing round1 attribute")
+            round_table.update_item(
+                Key={"uid": email},
+                UpdateExpression="REMOVE round1"
+            )
+            success_msg = f"✅ Removed 'round1' from {email}"
+            print(success_msg)
+            return success_msg
+        
+        not_found_msg = f"⚠️ Uid {email} not found in round table"
+        print(not_found_msg)
+        return not_found_msg
+        
+    except Exception as e:
+        error_msg = f"❌ EXCEPTION in remove_round1_attribute: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return error_msg
 
 @admin_app.post("/delete-responses")
-def delete_email(email: str):
-    emails = ["aniruddha.neema2023@vitstudent.ac.in","shubham.prasad2023@vitstudent.ac.in","medhansh.jain2022a@vitstudent.ac.in", "harshavardhan.kang2024@vitstudent.ac.in"]
-    if email not in emails:
-        return {"message":"you cannot delete responses"}
-    results = [delete_email_entries(table, email) for table in resources["domain_tables"].keys()]
-    round1_result = remove_round1_attribute(email)
-    results.append(round1_result)
-
-    return {"message": " Email deletions and updates completed.", "details": results}
+async def delete_email(email: str):
+    try:
+        print(f"\n{'='*60}")
+        print(f"🚀 Starting delete_email for: {email}")
+        print(f"{'='*60}\n")
+        
+        # Step 1: Whitelist check
+        print("📋 Step 1: Checking whitelist")
+        emails = ["aniruddha.neema2023@vitstudent.ac.in","shubham.prasad2023@vitstudent.ac.in","medhansh.jain2022a@vitstudent.ac.in", "harshavardhan.kang2024@vitstudent.ac.in"]
+        if email not in emails:
+            print(f"❌ Email {email} not in whitelist")
+            return JSONResponse(status_code=403, content={"message":"you cannot delete responses"})
+        print(f"✅ Email is whitelisted\n")
+        
+        # Step 2: Verify resources
+        print("📋 Step 2: Verifying resources")
+        if not resources or "domain_tables" not in resources:
+            error_msg = "Server configuration error: Resources not initialized"
+            print(f"❌ {error_msg}")
+            return JSONResponse(status_code=500, content={"detail": error_msg})
+        print(f"✅ Resources verified. Domain tables: {list(resources['domain_tables'].keys())}\n")
+        
+        # Step 3: Delete from domain tables
+        print("📋 Step 3: Deleting from domain tables")
+        results = []
+        for table_name in resources["domain_tables"].keys():
+            try:
+                result = delete_email_entries(table_name, email)
+                results.append(result)
+            except Exception as e:
+                error_msg = f"❌ Failed to delete from {table_name}: {str(e)}"
+                print(error_msg)
+                traceback.print_exc()
+                results.append(error_msg)
+        
+        print(f"\n✅ Completed domain table deletions\n")
+        
+        # Step 4: Remove round1 attribute
+        print("📋 Step 4: Removing round1 attribute from user_table")
+        try:
+            round1_result = remove_round1_attribute(email)
+            results.append(round1_result)
+        except Exception as e:
+            error_msg = f"❌ Failed to remove round1 attribute: {str(e)}"
+            print(error_msg)
+            traceback.print_exc()
+            results.append(error_msg)
+        
+        print(f"\n{'='*60}")
+        print(f"✅ COMPLETED delete_email for: {email}")
+        print(f"{'='*60}\n")
+        
+        return JSONResponse(
+            status_code=200,
+            content={"message": "Email deletions and updates completed.", "details": results}
+        )
+        
+    except Exception as e:
+        print(f"\n{'='*60}")
+        print(f"❌ CRITICAL ERROR in delete_email:")
+        print(f"{'='*60}")
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": f"Internal Server Error: {str(e)}",
+                "trace": traceback.format_exc()
+            }
+        )
 
 @admin_app.get("/search")
 async def search_user(email: str = Query(..., description="User email to search"), authorization: str = Depends(get_access_token)):
