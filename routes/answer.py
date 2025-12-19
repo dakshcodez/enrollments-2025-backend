@@ -23,6 +23,7 @@ class AnswerStruct(BaseModel):
     domain: str = Field(...)
     answers: List[AnswerItem] = Field(...)
     round: int
+    score : int = Field(0)
 
 domain_mapping = {
     "UI/UX": "ui",
@@ -89,6 +90,7 @@ async def post_answers(answerReq: AnswerStruct, idToken: str = Depends(get_acces
                     "email": email,
                     # f"round{answerReq.round}": answers_dict,
                     # f"score{answerReq.round}": answerReq.score
+                    "score1" : answerReq.score,
                     "round1": answers_data
                 }
             )
