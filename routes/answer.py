@@ -21,6 +21,7 @@ class AnswerItem(BaseModel):
 
 class AnswerStruct(BaseModel):
     domain: str = Field(...)
+    subcategory: Optional[str] = Field(None)  # For WEB domain: "FRONTEND" or "BACKEND"
     answers: Union[List[AnswerItem], List[str]] = Field(...)  # Round 1: List[AnswerItem], Round 2: List[str]
     round: int
     score: Optional[int] = Field(None)  # Only required for Round 1
@@ -37,8 +38,8 @@ domain_mapping = {
     'AI/ML':'ai',
     # 'RND':'rnd',
     "CC": "cc",
-    "FRONTEND":"web",
-    "BACKEND":"web",
+    # "FRONTEND":"web",
+    # "BACKEND":"web",
 }
 
 @ans_app.post("/submit")
@@ -59,8 +60,16 @@ async def post_answers(answerReq: AnswerStruct, idToken: str = Depends(get_acces
             return JSONResponse(status_code=404, content="User not found.")
 
         flat_domains = list(chain.from_iterable(user.get("domain", []).values()))
+        # Validate domain selection
         if answerReq.domain not in flat_domains:
             return JSONResponse(status_code=408, content="Domain was not selected")
+        
+        # Validate subcategory for WEB domain
+        if answerReq.subcategory and answerReq.domain != "WEB":
+            return JSONResponse(status_code=400, content="Subcategory only allowed for WEB domain")
+        
+        if answerReq.domain == "WEB" and answerReq.round == 2 and not answerReq.subcategory:
+            return JSONResponse(status_code=400, content="Subcategory required for WEB domain in Round 2")
         mapped_domain = domain_mapping.get(answerReq.domain)
         # if answerReq.domain in ["GRAPHIC DESIGN", "CC", "AI/ML", "UI/UX", "VIDEO EDITING"]:
         #     raise HTTPException(status_code=401, detail=f"Deadline for '{answerReq.domain}' is over.")
@@ -107,12 +116,13 @@ async def post_answers(answerReq: AnswerStruct, idToken: str = Depends(get_acces
             if domain_response.get('qualification_status1') != "qualified":
                 return JSONResponse(status_code=202, content=f"did not qualify round 1")
 
-            if answerReq.domain=="FRONTEND":
-                name="frontend"
-            elif answerReq.domain=="BACKEND":
-                name="backend"
+            # Determine field name based on subcategory or default to round2
+            if answerReq.subcategory == "FRONTEND":
+                name = "frontend"
+            elif answerReq.subcategory == "BACKEND":
+                name = "backend"
             else:
-                name="round2"
+                name = "round2"
             
             domain_table.update_item(
                 Key={"email": email},

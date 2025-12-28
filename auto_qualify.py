@@ -7,7 +7,14 @@ from config import initialize
 load_dotenv()
 
 # Configuration: Domains to process
-DOMAINS = ["web", "ai", "cc"]
+DOMAINS = ["WEB", "AI/ML", "CC"]
+
+# Mapping from display names to config.py keys
+DOMAIN_KEY_MAP = {
+    "WEB": "web",
+    "AI/ML": "ai",
+    "CC": "cc"
+}
 
 # Batch-specific thresholds
 BATCH_2024_THRESHOLD = 11  # 2024 batch needs score >= 11
@@ -27,10 +34,12 @@ def auto_qualify(dry_run=True):
     print(f"{'='*50}\n")
 
     for domain in DOMAINS:
-        print(f"Processing Domain: {domain.upper()}")
+        print(f"Processing Domain: {domain}")
         print("-" * 30)
         
-        table = domain_tables.get(domain)
+        # Get the config key for this domain
+        config_key = DOMAIN_KEY_MAP.get(domain, domain.lower())
+        table = domain_tables.get(config_key)
         if not table:
             print(f"⚠️ Table for domain {domain} not found, skipping...")
             continue
@@ -71,13 +80,17 @@ def auto_qualify(dry_run=True):
                     # Check current status
                     current_status = user.get('qualification_status1')
                     
+                    # TEMPORARILY COMMENTED OUT - Force update all users to migrate domain names
+                    # if current_status == 'qualified':
+                    #     already_qualified_count += 1
+                    #     # print(f"  - {email}: Already qualified (Score: {score})") 
+                    #     continue
+                    
                     if current_status == 'qualified':
                         already_qualified_count += 1
-                        # print(f"  - {email}: Already qualified (Score: {score})") 
-                        continue
                         
                     batch_label = "2024" if is_2024_batch else "2025"
-                    print(f"  ✅ Qualifying {email} (Score: {score}, Batch: {batch_label})")
+                    print(f"  ✅ Updating {email} (Score: {score}, Batch: {batch_label})")
                     
                     if is_2024_batch:
                         qualified_count_2024 += 1
@@ -98,13 +111,14 @@ def auto_qualify(dry_run=True):
                             
                             # 2. Update Main User Table
                             # We need to update the nested map `status1`
-                            # This requires a bit of care if status1 doesn't exist yet
+                            # Use ExpressionAttributeNames to handle special characters in domain names (e.g., AI/ML)
                             
                             # First, try to update assuming status1 exists
                             try:
                                 user_table.update_item(
                                     Key={'uid': email},
-                                    UpdateExpression=f"SET status1.{domain} = :s",
+                                    UpdateExpression="SET status1.#domain = :s",
+                                    ExpressionAttributeNames={'#domain': domain},
                                     ExpressionAttributeValues={':s': 'qualified'},
                                     ConditionExpression="attribute_exists(status1)"
                                 )

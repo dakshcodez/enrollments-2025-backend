@@ -67,3 +67,5 @@ userTesting.csv
 usersReal.csv
 add_questions_script.py
 domains.csv
+auto_qualify.py
+cleanup_old_domain_keys.py
