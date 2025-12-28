@@ -21,9 +21,9 @@ class AnswerItem(BaseModel):
 
 class AnswerStruct(BaseModel):
     domain: str = Field(...)
-    answers: List[AnswerItem] = Field(...)
+    answers: Union[List[AnswerItem], List[str]] = Field(...)  # Round 1: List[AnswerItem], Round 2: List[str]
     round: int
-    score : int = Field(0)
+    score: Optional[int] = Field(None)  # Only required for Round 1
 
 domain_mapping = {
     "UI/UX": "ui",
@@ -79,7 +79,12 @@ async def post_answers(answerReq: AnswerStruct, idToken: str = Depends(get_acces
         domain_response = response.get('Item')
 
         # Convert Pydantic models to dict for DynamoDB
-        answers_data = [item.dict() for item in answerReq.answers]
+        # For Round 1: answers is List[AnswerItem], convert to dict
+        # For Round 2: answers is List[str], use as-is
+        if answerReq.round == 1:
+            answers_data = [item.dict() for item in answerReq.answers]
+        else:  # Round 2
+            answers_data = answerReq.answers  # Already a list of strings
 
         if answerReq.round == 1:
             if 'Item' in response:

@@ -66,3 +66,4 @@ head-admin copy.csv
 userTesting.csv
 usersReal.csv
 add_questions_script.py
+domains.csv
