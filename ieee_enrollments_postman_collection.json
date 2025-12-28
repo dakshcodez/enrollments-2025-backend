@@ -808,7 +808,7 @@
             "name": "Answer",
             "item": [
                 {
-                    "name": "Submit Answers",
+                    "name": "Submit Answers - Round 1",
                     "request": {
                         "method": "POST",
                         "header": [
@@ -825,7 +825,7 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n    \"domain\": \"WEB\",\n    \"answers\": [\n        {\n            \"questionId\": \"31c0f450-07ff-4008-a045-d31e19428083\",\n            \"answer\": \"Answer 1\"\n        }\n    ],\n    \"round\": 1\n}"
+                            "raw": "{\n    \"domain\": \"WEB\",\n    \"answers\": [\n        {\n            \"questionId\": \"31c0f450-07ff-4008-a045-d31e19428083\",\n            \"answer\": \"Answer 1\"\n        },\n        {\n            \"questionId\": \"42d1g561-18gg-5119-b156-e42f30539194\",\n            \"answer\": \"Answer 2\"\n        }\n    ],\n    \"round\": 1,\n    \"score\": 85\n}"
                         },
                         "url": {
                             "raw": "{{baseUrl}}/answer/submit",
@@ -837,7 +837,109 @@
                                 "submit"
                             ]
                         },
-                        "description": "Submits answers for a specific domain and round."
+                        "description": "Submits Round 1 answers with questionId/answer pairs and score."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Submit Answers - Round 2 WEB (FRONTEND)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"domain\": \"WEB\",\n    \"subcategory\": \"FRONTEND\",\n    \"answers\": [\n        \"https://github.com/username/frontend-project\",\n        \"https://deployed-frontend-app.vercel.app\"\n    ],\n    \"round\": 2\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/answer/submit",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "answer",
+                                "submit"
+                            ]
+                        },
+                        "description": "Submits Round 2 answers for WEB domain with FRONTEND subcategory. Answers are a list of links/strings."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Submit Answers - Round 2 WEB (BACKEND)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"domain\": \"WEB\",\n    \"subcategory\": \"BACKEND\",\n    \"answers\": [\n        \"https://github.com/username/backend-project\",\n        \"https://api-docs-link.com\"\n    ],\n    \"round\": 2\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/answer/submit",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "answer",
+                                "submit"
+                            ]
+                        },
+                        "description": "Submits Round 2 answers for WEB domain with BACKEND subcategory. Answers are a list of links/strings."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Submit Answers - Round 2 Other Domains",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{authToken}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"domain\": \"AI/ML\",\n    \"answers\": [\n        \"https://github.com/username/aiml-project\",\n        \"https://colab.research.google.com/drive/xyz\"\n    ],\n    \"round\": 2\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/answer/submit",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "answer",
+                                "submit"
+                            ]
+                        },
+                        "description": "Submits Round 2 answers for non-WEB domains (AI/ML, APP, CC, etc.). No subcategory field needed."
                     },
                     "response": []
                 }
