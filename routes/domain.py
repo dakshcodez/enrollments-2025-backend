@@ -15,36 +15,47 @@ resources = initialize()
 user_table = resources['user_table']
 quiz_table = resources['quiz_table']
 
-@domain_app.post('/submit')
-async def post_domain(domain: Dict[str, List[str]], id_token: str = Depends(get_access_token)):
-    try:
-        decoded_token = auth.verify_id_token(id_token, app=resources['firebase_app'])
-        email = decoded_token.get('email')
+DOMAIN_QUESTION_CONFIG = {
+    "WEB": [12,0],
+    "APP": [12,0],
+    "AI/ML": [12,0],
+    "CC": [12,0],
+    "UI/UX": [5, 5],
+    "VIDEO": [5, 5],
+    "EVENTS": [9, 5],
+    "PNM": [12, 3]
+}
 
-        response = user_table.get_item(Key={'uid': email})
-        user = response.get('Item')
+# @domain_app.post('/submit')
+# async def post_domain(domain: Dict[str, List[str]], id_token: str = Depends(get_access_token)):
+#     try:
+#         decoded_token = auth.verify_id_token(id_token, app=resources['firebase_app'])
+#         email = decoded_token.get('email')
 
-        if not user:
-            raise HTTPException(status_code=404, content="User not found")
+#         response = user_table.get_item(Key={'uid': email})
+#         user = response.get('Item')
 
-        if "round1" in user:
-            return JSONResponse(status_code=204, content="Quiz Started")
+#         if not user:
+#             raise HTTPException(status_code=404, content="User not found")
 
-        if not domain:
-            raise HTTPException(status_code=400, content="Domain list cannot be empty")
+#         if "round1" in user:
+#             return JSONResponse(status_code=204, content="Quiz Started")
 
-        for key, domain_list in domain.items():
-            limit = 3 if "CC" in domain_list else 2
-            if len(domain_list) > limit:
-                raise HTTPException(status_code=400, detail=f"Domain array for key {key} cannot have more than {limit} entries")
+#         if not domain:
+#             raise HTTPException(status_code=400, content="Domain list cannot be empty")
 
-        user['domain'] = domain
-        user_table.put_item(Item=user)
+#         for key, domain_list in domain.items():
+#             limit = 3 if "CC" in domain_list else 2
+#             if len(domain_list) > limit:
+#                 raise HTTPException(status_code=400, detail=f"Domain array for key {key} cannot have more than {limit} entries")
 
-        return JSONResponse(status_code=200, content=domain)
+#         user['domain'] = domain
+#         user_table.put_item(Item=user)
 
-    except Exception as e:
-        raise HTTPException(status_code=400, content=f"Error: {str(e)}")
+#         return JSONResponse(status_code=200, content=domain)
+
+#     except Exception as e:
+#         raise HTTPException(status_code=400, content=f"Error: {str(e)}")
 
 
 @domain_app.get('/questions')
@@ -68,18 +79,24 @@ async def get_qs(domain: str, round: str, id_token: str = Depends(get_access_tok
         if not secret_key:
             raise HTTPException(status_code=500, detail="Secret key not found in environment variables")
 
-        selected_mcq = random.sample(mcq_data, min(7, len(mcq_data)))
+        # Get configuration for the domain, default to [7, 3] if not found
+        # Format: [num_mcq, num_desc]
+        counts = DOMAIN_QUESTION_CONFIG.get(domain, [7, 3]) 
+        target_mcq_count = counts[0]
+        target_desc_count = counts[1]
 
-        selected_desc = desc_data[:3] if len(desc_data) >= 3 else desc_data
-        remaining_mcq_needed = 3 - len(selected_desc)
+        # Select MCQs
+        selected_mcq = random.sample(mcq_data, min(target_mcq_count, len(mcq_data)))
 
-        if remaining_mcq_needed > 0:
-            extra_mcqs = [q for q in mcq_data if q not in selected_mcq]
-            selected_mcq += random.sample(extra_mcqs, min(remaining_mcq_needed, len(extra_mcqs)))
+        # Select Descriptive
+        selected_desc = random.sample(desc_data, min(target_desc_count, len(desc_data)))
 
         formatted_questions = []
         for q in selected_mcq + selected_desc:
             question_data = {"question": q["question"]}
+
+            if "id" in q:
+                question_data["id"] = str(q["id"])
 
             if "options" in q:
                 question_data["options"] = q["options"]

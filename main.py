@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-# from routes.domain import domain_app
+from routes.domain import domain_app
 from routes.user import user
-# from routes.answer import ans_app
-# from routes.slots import slot_app
+from routes.answer import ans_app
+from routes.slots import slot_app
 from routes.admin import admin_app
 from fastapi.responses import FileResponse
 import os
@@ -12,7 +12,10 @@ origins = [
     "https://enrollments.ieeecsvit.com",
     "http://localhost:5173",
     "http://localhost:3000",
-    "https://admin-portal-three-peach.vercel.app"
+    "https://admin-portal-three-peach.vercel.app",
+    "https://enrollments-admin.vercel.app",
+    "https://enrollments-2025-frontend-eta.vercel.app",
+    "https://enrollments-2025-frontend-a1rp.vercel.app"
 ]
 
 app = FastAPI()
@@ -39,6 +42,6 @@ def get_favicon():
 
 app.mount("/user", user)
 app.mount("/admin", admin_app)
-# app.mount("/domain", domain_app)
-# app.mount("/answer", ans_app)
-# app.mount("/slots", slot_app)
+app.mount("/domain", domain_app)
+app.mount("/answer", ans_app)
+app.mount("/slots", slot_app)

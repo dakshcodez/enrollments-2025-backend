@@ -57,3 +57,18 @@ pip-wheel-metadata/
 uvicorn.log
 serviceAccountKey.json
 .vercel
+usersTesting.csv
+head-admin.csv
+debug_user_slots.py
+wipe_slots.py
+routes/admin-getallsuer.py
+head-admin copy.csv
+userTesting.csv
+usersReal.csv
+add_questions_script.py
+domains.csv
+# auto_qualify.py
+cleanup_old_domain_keys.py
+*.csv
+auto_qualify.py
+export_qualified_users.py

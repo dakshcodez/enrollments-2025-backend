@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, File, UploadFile, Form, Query
 from middleware.verifyToken import get_access_token
 from config import initialize
+from botocore.exceptions import ClientError
 from fastapi.responses import JSONResponse
 from firebase_admin import auth
 from typing import Optional, List
@@ -12,29 +13,44 @@ import boto3
 import json
 from boto3.dynamodb.conditions import Attr
 from decimal import Decimal
+import traceback
 
-S3_BUCKET_NAME = os.getenv('MY_S3_BUCKET_NAME')
-if not S3_BUCKET_NAME:
-    raise ValueError("S3_BUCKET_NAME environment variable is not set")
+# Cloudflare R2 Bucket (S3-compatible)
+R2_BUCKET_NAME = os.getenv('MY_R2_BUCKET_NAME')
+if not R2_BUCKET_NAME:
+    raise ValueError("R2_BUCKET_NAME environment variable is not set")
 
 admin_app = FastAPI()
 
 resources = initialize()
 admin_table = resources['admin_table']
 
+# Domain interview configuration
+DOMAIN_INTERVIEW_CONFIG = {
+    "WEB": {"rounds": 1, "type": "one-on-one"},
+    "APP": {"rounds": 1, "type": "one-on-one"},
+    "AI/ML": {"rounds": 1, "type": "one-on-one"},
+    "CC": {"rounds": 1, "type": "one-on-one"},
+    "UI/UX": {"rounds": 1, "type": "one-on-one"},
+    # "GRAPHIC DESIGN": {"rounds": 1, "type": "one-on-one"},
+    "VIDEO EDITING": {"rounds": 1, "type": "one-on-one"},
+    "EVENTS": {"rounds": 2, "type": "one-on-one-then-group"},
+    "PNM": {"rounds": 2, "type": "one-on-one-then-group"}
+}
+
 DOMAIN_MAPPING = {
     "UI/UX": "ui",
-    "GRAPHIC DESIGN": "graphic",
+    # "GRAPHIC DESIGN": "graphic",
     "VIDEO EDITING": "video",
     'EVENTS': 'events',
     'PNM': 'pnm',
     'WEB': 'web',
-    'IOT': 'iot',
+    # 'IOT': 'iot',
     'APP': 'app',
     'AI/ML': 'ai',
     'RND': 'rnd',
     'CC': 'cc',
-    "WEB":"web"
+    # "WEB":"web"
 }
 
 from fastapi import HTTPException
@@ -68,13 +84,103 @@ async def verify_admin(authorization: str, required_domain: str = None):
                     content={"detail": "Access denied: No permission for this domain"}
                 )
 
-        return email
+        return admin
 
     except Exception as e:
         return JSONResponse(
             status_code=401,
             content={"detail": f"Authentication failed: {str(e)}"}
         )
+
+def is_head_admin(admin: dict) -> bool:
+    return admin.get('role') == 'head-admin'
+
+class AddSubAdminRequest(BaseModel):
+    email:str
+    allowed_domains: List[str]
+
+@admin_app.post('/add-sub-admin')
+async def add_sub_admin(
+    request: AddSubAdminRequest,
+    authorization: str = Depends(get_access_token)
+):
+    try:
+        admin_result = await verify_admin(authorization)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        if not is_head_admin(admin_result):
+            raise HTTPException(status_code=403, detail="Access denied: Not a head admin")
+
+        requester_domains = set(admin_result.get('allowed_domains', []))
+        requested_domains = set(request.allowed_domains)
+    
+        if not requested_domains.issubset(requester_domains):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "You can only assign domains you have access to"}
+            )
+        
+        sub_admin_response = admin_table.get_item(Key={'email': request.email})
+        sub_admin = sub_admin_response.get('Item')
+        
+        if sub_admin:
+            raise HTTPException(status_code=400, detail="Sub admin already exists")
+        
+        admin_table.put_item(
+            Item={
+                'email': request.email,
+                'role': 'sub-admin',
+                'allowed_domains': request.allowed_domains,
+                'created-by': admin_result['email'] 
+            }
+        )
+        
+        return JSONResponse(status_code=200, content={"detail": "Sub admin added successfully"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+@admin_app.get("/list-sub-admins")
+async def list_sub_admins(authorization: str = Depends(get_access_token)):
+    admin = await verify_admin(authorization)
+    if isinstance(admin, JSONResponse):
+        return admin
+    
+    if not is_head_admin(admin):
+        return JSONResponse(status_code=403, content={"detail": "Only head-admins can list sub-admins"})
+    
+    # Scan for sub-admins created by this head-admin
+    response = admin_table.scan(
+        FilterExpression=Attr('created-by').eq(admin['email'])
+    )
+    
+    return {"sub_admins": response.get('Items', [])}
+
+@admin_app.delete("/remove-sub-admin")
+async def remove_sub_admin(
+    email: str,
+    authorization: str = Depends(get_access_token)
+):
+    admin = await verify_admin(authorization)
+    if isinstance(admin, JSONResponse):
+        return admin
+    
+    if not is_head_admin(admin):
+        return JSONResponse(status_code=403, content={"detail": "Only head-admins can remove sub-admins"})
+    
+    # Get the sub-admin to verify they were created by this head-admin
+    sub_admin_response = admin_table.get_item(Key={'email': email})
+    sub_admin = sub_admin_response.get('Item')
+    
+    if not sub_admin:
+        return JSONResponse(status_code=404, content={"detail": "Sub-admin not found"})
+    
+    if sub_admin.get('created-by') != admin['email']:
+        return JSONResponse(status_code=403, content={"detail": "You can only remove sub-admins you created"})
+    
+    admin_table.delete_item(Key={'email': email})
+    
+    return JSONResponse(status_code=200, content={"detail": "Sub-admin removed successfully"})
 
 @admin_app.get('/fetch')
 async def fetch_domains(
@@ -202,11 +308,18 @@ class AddRequest(BaseModel):
     question_data: QuestionData
 
 async def upload_to_s3(file: UploadFile, bucket_name: str) -> str:
+    # Debug logging
+    print(f"🔍 DEBUG: Bucket name = {bucket_name}")
+    print(f"🔍 DEBUG: R2 Endpoint = {os.getenv('MY_R2_ENDPOINT')}")
+    print(f"🔍 DEBUG: Access Key exists = {os.getenv('MY_R2_ACCESS_KEY') is not None}")
+    
+    # Cloudflare R2 client (S3-compatible)
     s3_client = boto3.client(
         's3',
-        aws_access_key_id=os.getenv("MY_AWS_ACCESS_KEY"),
-        aws_secret_access_key=os.getenv("MY_AWS_SECRET_KEY"),
-        region_name=os.getenv("MY_AWS_REGION")
+        endpoint_url=os.getenv("MY_R2_ENDPOINT"),  # R2 endpoint
+        aws_access_key_id=os.getenv("MY_R2_ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("MY_R2_SECRET_KEY"),
+        region_name='auto'  # R2 uses 'auto' for region
     )
 
     file_extension = file.filename.split('.')[-1]
@@ -221,7 +334,12 @@ async def upload_to_s3(file: UploadFile, bucket_name: str) -> str:
         }
     )
 
-    url = f"https://{bucket_name}.s3.amazonaws.com/{unique_filename}"
+    # Use R2 public URL (from R2.dev subdomain or custom domain)
+    r2_public_url = os.getenv("MY_R2_PUBLIC_URL")
+    if not r2_public_url:
+        raise ValueError("MY_R2_PUBLIC_URL environment variable is not set")
+    
+    url = f"{r2_public_url}/{unique_filename}"
     return url
 
 @admin_app.post('/questions')
@@ -239,7 +357,10 @@ async def add_question(
         if isinstance(admin_result, JSONResponse):
             return admin_result
         quiz_table = resources['quiz_table']
-        question_data_dict = {"question": question}
+        question_data_dict = {
+            "id": str(uuid.uuid4()),
+            "question": question
+        }
 
         if options:
             options = json.loads(options[0])
@@ -248,7 +369,7 @@ async def add_question(
                 question_data_dict["correctIndex"] = int(correctIndex)
 
         if image:
-            image_url = await upload_to_s3(image, bucket_name=S3_BUCKET_NAME)
+            image_url = await upload_to_s3(image, bucket_name=R2_BUCKET_NAME)
             question_data_dict["image_url"] = image_url
 
         print(question_data_dict)
@@ -293,15 +414,17 @@ async def mark_qualification(request: QualificationRequest, authorization: str =
                 content={"detail": "Invalid status. Must be 'qualified', 'unqualified', or 'pending'."}
             )
         
-        if request.round==1:
-            return JSONResponse(
-                status_code=203,
-                content={"detail": "Round 1 evaluations are closed'."}
-            )
+        # if request.round==1:
+        #     return JSONResponse(
+        #         status_code=203,
+        #         content={"detail": "Round 1 evaluations are closed'."}
+        #     )
 
-        email = await verify_admin(authorization, request.domain)
-        if isinstance(email, JSONResponse):
-            return email
+        admin_result = await verify_admin(authorization, request.domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        email = admin_result['email']
 
         mapped_domain = DOMAIN_MAPPING.get(request.domain)
         if not mapped_domain:
@@ -379,6 +502,7 @@ async def get_qs(domain: str, round: str, authorization: str = Depends(get_acces
 
         formatted_mcq = [
             {
+                "id": int(q.get("id")) if isinstance(q.get("id"), Decimal) else q.get("id"),
                 "question": q["question"],
                 "options": q["options"],
                 "correctIndex": int(q["correctIndex"]),
@@ -389,6 +513,7 @@ async def get_qs(domain: str, round: str, authorization: str = Depends(get_acces
 
         formatted_desc = [
             {
+                "id": int(q.get("id")) if isinstance(q.get("id"), Decimal) else q.get("id"),
                 "question": q["question"],
                 **({"image_url": str(q["image_url"])} if "image_url" in q else {})
             }
@@ -407,36 +532,149 @@ async def get_qs(domain: str, round: str, authorization: str = Depends(get_acces
 round_table = resources["user_table"]
 
 def delete_email_entries(table_name: str, email: str):
-    table = resources["domain_tables"].get(table_name)
-    if not table:
-        return f"Table {table_name} not found."
+    try:
+        print(f"🔍 DEBUG: Attempting to delete from table: {table_name}")
+        table = resources["domain_tables"].get(table_name)
+        if not table:
+            error_msg = f"Table {table_name} not found."
+            print(f"❌ ERROR: {error_msg}")
+            return error_msg
 
-    response = table.get_item(Key={"email": email})
-    if "Item" in response:
-        table.delete_item(Key={"email": email})
-        return f"Deleted {email} from {table_name}"
-    return f"Email {email} not found in {table_name}"
+        print(f"🔍 DEBUG: Getting item for email: {email} from {table_name}")
+        response = table.get_item(Key={"email": email})
+        
+        if "Item" in response:
+            print(f"🔍 DEBUG: Item found, deleting from {table_name}")
+            table.delete_item(Key={"email": email})
+            success_msg = f"✅ Deleted {email} from {table_name}"
+            print(success_msg)
+            return success_msg
+        
+        not_found_msg = f"⚠️ Email {email} not found in {table_name}"
+        print(not_found_msg)
+        return not_found_msg
+        
+    except ClientError as e:
+        # Handle AWS-specific errors
+        if e.response['Error']['Code'] == 'ResourceNotFoundException':
+            error_msg = f"⚠️ Table 'domain-{table_name}' does not exist in DynamoDB (skipping)"
+            print(error_msg)
+            return error_msg
+        else:
+            error_msg = f"❌ AWS ClientError in delete_email_entries({table_name}): {str(e)}"
+            print(error_msg)
+            traceback.print_exc()
+            return error_msg
+    except Exception as e:
+        error_msg = f"❌ EXCEPTION in delete_email_entries({table_name}): {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return error_msg
 
 def remove_round1_attribute(email: str):
-    response = round_table.get_item(Key={"uid": email})
-    if "Item" in response:
-        round_table.update_item(
-            Key={"uid": email},
-            UpdateExpression="REMOVE round1"
-        )
-        return f"Removed 'round1' from {email}"
-    return f"Uid {email} not found in round table"
+    try:
+        print(f"🔍 DEBUG: Attempting to remove round1 attribute for: {email}")
+        response = round_table.get_item(Key={"uid": email})
+        
+        if "Item" in response:
+            print(f"🔍 DEBUG: User found, checking if round1 exists")
+            user_item = response["Item"]
+            
+            # Check if round1 actually exists before trying to remove it
+            if "round1" not in user_item:
+                msg = f"⚠️ round1 attribute doesn't exist for {email}"
+                print(msg)
+                return msg
+            
+            print(f"🔍 DEBUG: Removing round1 attribute")
+            round_table.update_item(
+                Key={"uid": email},
+                UpdateExpression="REMOVE round1"
+            )
+            success_msg = f"✅ Removed 'round1' from {email}"
+            print(success_msg)
+            return success_msg
+        
+        not_found_msg = f"⚠️ Uid {email} not found in round table"
+        print(not_found_msg)
+        return not_found_msg
+        
+    except Exception as e:
+        error_msg = f"❌ EXCEPTION in remove_round1_attribute: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return error_msg
 
 @admin_app.post("/delete-responses")
-def delete_email(email: str):
-    emails = ["aniruddha.neema2023@vitstudent.ac.in","shubham.prasad2023@vitstudent.ac.in","medhansh.jain2022a@vitstudent.ac.in"]
-    if email not in emails:
-        return {"message":"you cannot delete responses"}
-    results = [delete_email_entries(table, email) for table in resources["domain_tables"].keys()]
-    round1_result = remove_round1_attribute(email)
-    results.append(round1_result)
-
-    return {"message": " Email deletions and updates completed.", "details": results}
+async def delete_email(email: str):
+    try:
+        print(f"\n{'='*60}")
+        print(f"🚀 Starting delete_email for: {email}")
+        print(f"{'='*60}\n")
+        
+        # Step 1: Whitelist check
+        print("📋 Step 1: Checking whitelist")
+        emails = ["aniruddha.neema2023@vitstudent.ac.in","shubham.prasad2023@vitstudent.ac.in","medhansh.jain2022a@vitstudent.ac.in", "harshavardhan.kang2024@vitstudent.ac.in"]
+        if email not in emails:
+            print(f"❌ Email {email} not in whitelist")
+            return JSONResponse(status_code=403, content={"message":"you cannot delete responses"})
+        print(f"✅ Email is whitelisted\n")
+        
+        # Step 2: Verify resources
+        print("📋 Step 2: Verifying resources")
+        if not resources or "domain_tables" not in resources:
+            error_msg = "Server configuration error: Resources not initialized"
+            print(f"❌ {error_msg}")
+            return JSONResponse(status_code=500, content={"detail": error_msg})
+        print(f"✅ Resources verified. Domain tables: {list(resources['domain_tables'].keys())}\n")
+        
+        # Step 3: Delete from domain tables
+        print("📋 Step 3: Deleting from domain tables")
+        results = []
+        for table_name in resources["domain_tables"].keys():
+            try:
+                result = delete_email_entries(table_name, email)
+                results.append(result)
+            except Exception as e:
+                error_msg = f"❌ Failed to delete from {table_name}: {str(e)}"
+                print(error_msg)
+                traceback.print_exc()
+                results.append(error_msg)
+        
+        print(f"\n✅ Completed domain table deletions\n")
+        
+        # Step 4: Remove round1 attribute
+        print("📋 Step 4: Removing round1 attribute from user_table")
+        try:
+            round1_result = remove_round1_attribute(email)
+            results.append(round1_result)
+        except Exception as e:
+            error_msg = f"❌ Failed to remove round1 attribute: {str(e)}"
+            print(error_msg)
+            traceback.print_exc()
+            results.append(error_msg)
+        
+        print(f"\n{'='*60}")
+        print(f"✅ COMPLETED delete_email for: {email}")
+        print(f"{'='*60}\n")
+        
+        return JSONResponse(
+            status_code=200,
+            content={"message": "Email deletions and updates completed.", "details": results}
+        )
+        
+    except Exception as e:
+        print(f"\n{'='*60}")
+        print(f"❌ CRITICAL ERROR in delete_email:")
+        print(f"{'='*60}")
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": f"Internal Server Error: {str(e)}",
+                "trace": traceback.format_exc()
+            }
+        )
 
 @admin_app.get("/search")
 async def search_user(email: str = Query(..., description="User email to search"), authorization: str = Depends(get_access_token)):
@@ -455,3 +693,432 @@ async def search_user(email: str = Query(..., description="User email to search"
         "status1": user.get("status1", {}),
         "status2": user.get("status2", {})
     }
+
+
+class SlotRequest(BaseModel):
+    domain: str
+    date: str
+    startTime: str
+    endTime: str
+    panel: int
+    interview_round: int = 1  # Default to round 1
+    max_capacity: int = 1     # Default to 1 (one-on-one)
+
+@admin_app.post("/create-slot")
+async def create_slot(slot_request: SlotRequest, authorization: str = Depends(get_access_token)):
+    admin_result = await verify_admin(authorization, slot_request.domain)
+    if isinstance(admin_result, JSONResponse):
+        return admin_result
+
+    # Create unique ID: DOMAIN_DATE_START_PANEL_ROUND
+    slot_id = f"{slot_request.domain}_{slot_request.date}_{slot_request.startTime}_P{slot_request.panel}_R{slot_request.interview_round}"
+
+    interview_table = resources["interview_table"]
+
+    try:
+        from datetime import datetime as dt
+        interview_table.put_item(
+            Item={
+                "iid": slot_id,
+                "domain": slot_request.domain,
+                "date": slot_request.date,
+                "time_slot": f"{slot_request.startTime} - {slot_request.endTime}",
+                "panel": slot_request.panel,
+                "interview_round": slot_request.interview_round,
+                "max_capacity": slot_request.max_capacity,
+                "assigned_users": [],  # List of user emails
+                "assigned_by": None,
+                "assigned_at": None
+            }
+        )
+        return JSONResponse(
+            status_code=200, 
+            content={
+                "detail": f"Slot created for Panel {slot_request.panel}, Round {slot_request.interview_round}",
+                "slot_id": slot_id,
+                "max_capacity": slot_request.max_capacity
+            }
+        )
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error creating slot: {str(e)}"})
+
+
+@admin_app.delete("/delete-slot")
+async def delete_slot(slot_id: str = Query(..., description="ID of the slot to delete"), authorization: str = Depends(get_access_token)):
+    """Delete an interview slot. Only allowed if no users are assigned."""
+    try:
+        # Extract domain from slot_id (Format: DOMAIN_DATE_START_PANEL_ROUND)
+        try:
+            domain = slot_id.split('_')[0]
+        except IndexError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid slot ID format"})
+
+        admin_result = await verify_admin(authorization, domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+
+        interview_table = resources["interview_table"]
+        
+        # Check if slot exists and has assigned users
+        response = interview_table.get_item(Key={'iid': slot_id})
+        slot = response.get('Item')
+        
+        if not slot:
+            return JSONResponse(status_code=404, content={"detail": "Slot not found"})
+            
+        assigned_users = slot.get('assigned_users', [])
+        if assigned_users:
+            return JSONResponse(
+                status_code=409, 
+                content={
+                    "detail": f"Cannot delete slot. {len(assigned_users)} user(s) are already assigned.",
+                    "assigned_users": assigned_users
+                }
+            )
+
+        # Delete the slot
+        interview_table.delete_item(Key={'iid': slot_id})
+        
+        return JSONResponse(
+            status_code=200,
+            content={"detail": f"Slot {slot_id} deleted successfully"}
+        )
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error deleting slot: {str(e)}"})
+
+
+class UnassignSlotRequest(BaseModel):
+    user_email: str
+    slot_id: str
+
+@admin_app.post("/unassign-slot")
+async def unassign_slot(request: UnassignSlotRequest, authorization: str = Depends(get_access_token)):
+    """Unassign a user from an interview slot"""
+    try:
+        # Extract domain from slot_id
+        try:
+            domain = request.slot_id.split('_')[0]
+            round_num = request.slot_id.split('_')[-1].replace('R', '') # Extract round number
+            round_key = f"round{round_num}"
+        except IndexError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid slot ID format"})
+
+        admin_result = await verify_admin(authorization, domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+
+        user_table = resources['user_table']
+        interview_table = resources['interview_table']
+
+        # 1. Remove user from slot's assigned_users list
+        # Since assigned_users is a List (L), we cannot use DELETE in UpdateExpression easily to remove by value.
+        # We must fetch, modify, and update.
+        response = interview_table.get_item(Key={'iid': request.slot_id})
+        slot = response.get('Item')
+
+        if not slot:
+            return JSONResponse(status_code=404, content={"detail": "Slot not found"})
+
+        assigned_users = slot.get('assigned_users', [])
+        if request.user_email in assigned_users:
+            assigned_users.remove(request.user_email)
+            
+            interview_table.update_item(
+                Key={'iid': request.slot_id},
+                UpdateExpression="SET assigned_users = :u",
+                ExpressionAttributeValues={':u': assigned_users}
+            )
+        else:
+             # User wasn't in the list, but we proceed to ensure they are removed from user_table too
+             pass
+
+        # 2. Remove slot from user's interview_slots
+        # We need to fetch, modify, and put because removing a nested key in DynamoDB 
+        # is tricky with UpdateExpression if the key might not exist
+        response = user_table.get_item(Key={'uid': request.user_email})
+        user = response.get('Item')
+
+        if user:
+            interview_slots = user.get('interview_slots', {})
+            if round_key in interview_slots and domain in interview_slots[round_key]:
+                # Check if the slot ID matches before deleting (safety check)
+                if interview_slots[round_key][domain].get('iid') == request.slot_id:
+                    del interview_slots[round_key][domain]
+                    
+                    # Clean up empty round dict if needed
+                    if not interview_slots[round_key]:
+                        del interview_slots[round_key]
+
+                    user_table.update_item(
+                        Key={'uid': request.user_email},
+                        UpdateExpression="SET interview_slots = :slots",
+                        ExpressionAttributeValues={':slots': interview_slots}
+                    )
+
+        return JSONResponse(
+            status_code=200,
+            content={"detail": f"User {request.user_email} unassigned from slot {request.slot_id}"}
+        )
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error unassigning slot: {str(e)}"})
+
+
+# New endpoints for admin-controlled slot assignment
+
+@admin_app.get("/qualified-users")
+async def get_qualified_users(
+    domain: str = Query(...),
+    interview_round: int = Query(1),
+    authorization: str = Depends(get_access_token)
+):
+    """Get list of qualified users who need slot assignment for a specific domain and round"""
+    try:
+        admin_result = await verify_admin(authorization, domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        # Get domain-specific table
+        domain_mapping = {
+            "WEB": "web", "APP": "app", "AI/ML": "ai", "CC": "cc",
+            "UI/UX": "ui", "VIDEO EDITING": "video",
+            "EVENTS": "events", "PNM": "pnm"
+        }
+        
+        mapped_domain = domain_mapping.get(domain)
+        if not mapped_domain:
+            return JSONResponse(status_code=400, content={"detail": "Invalid domain"})
+        
+        # Get domain table from resources
+        domain_tables = resources['domain_tables']
+        domain_table = domain_tables.get(mapped_domain)
+        
+        if not domain_table:
+            return JSONResponse(status_code=400, content={"detail": f"Domain table not found for {domain}"})
+        
+        user_table = resources['user_table']
+        
+        # Scan domain table for qualified users
+        qualification_field = f"qualification_status{interview_round}"
+        response = domain_table.scan(
+            FilterExpression=Attr(qualification_field).eq("qualified")
+        )
+        
+        qualified_users = []
+        for item in response.get('Items', []):
+            user_email = item.get('email')
+            
+            # Get user details
+            user_response = user_table.get_item(Key={'uid': user_email})
+            user = user_response.get('Item', {})
+            
+            # Check if user already has slot for this round
+            interview_slots = user.get('interview_slots', {})
+            round_key = f"round{interview_round}"
+            # Check if user already has a slot for THIS domain in this round
+            has_slot = False
+            if round_key in interview_slots and isinstance(interview_slots[round_key], dict):
+                has_slot = domain in interview_slots[round_key]
+            
+            qualified_users.append({
+                "email": user_email,
+                "name": user.get('name', 'N/A'),
+                f"has_slot_round{interview_round}": has_slot,
+                "qualification_status": item.get(qualification_field, "unmarked")
+            })
+        
+        return JSONResponse(status_code=200, content={"users": qualified_users})
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error fetching qualified users: {str(e)}"})
+
+
+class AssignSlotRequest(BaseModel):
+    slot_id: str
+    user_emails: List[str]
+    domain: str
+    interview_round: int
+
+
+@admin_app.post("/assign-slot")
+async def assign_slot(
+    request: AssignSlotRequest,
+    authorization: str = Depends(get_access_token)
+):
+    """Assign a slot to one or more users"""
+    try:
+        admin_result = await verify_admin(authorization, request.domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        admin_email = admin_result['email']
+        interview_table = resources['interview_table']
+        user_table = resources['user_table']
+        
+        # Get slot details
+        slot_response = interview_table.get_item(Key={'iid': request.slot_id})
+        slot = slot_response.get('Item')
+        
+        if not slot:
+            return JSONResponse(status_code=404, content={"detail": "Slot not found"})
+        
+        # Check capacity
+        current_assigned = slot.get('assigned_users', [])
+        max_capacity = slot.get('max_capacity', 1)
+        
+        if len(current_assigned) + len(request.user_emails) > max_capacity:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": f"Slot capacity exceeded. Max: {max_capacity}, Current: {len(current_assigned)}"}
+            )
+        
+        # Update slot with assigned users
+        from datetime import datetime as dt
+        updated_assigned_users = current_assigned + request.user_emails
+        
+        interview_table.update_item(
+            Key={'iid': request.slot_id},
+            UpdateExpression="SET assigned_users = :users, assigned_by = :admin, assigned_at = :time",
+            ExpressionAttributeValues={
+                ':users': updated_assigned_users,
+                ':admin': admin_email,
+                ':time': dt.utcnow().isoformat()
+            }
+        )
+        
+        # Update each user's record
+        round_key = f"round{request.interview_round}"
+        for user_email in request.user_emails:
+            user_response = user_table.get_item(Key={'uid': user_email})
+            user = user_response.get('Item')
+            
+            if not user:
+                continue
+            
+            # Initialize interview_slots if not exists
+            interview_slots = user.get('interview_slots', {})
+            
+            # Ensure round_key exists and is a dict (handle potential legacy data or new init)
+            if round_key not in interview_slots or not isinstance(interview_slots[round_key], dict):
+                interview_slots[round_key] = {}
+
+            # Assign slot to DOMAIN key within round
+            interview_slots[round_key][request.domain] = {
+                "iid": request.slot_id,
+                "time": slot.get('time_slot'),
+                "panel": slot.get('panel'),
+                "domain": request.domain,
+                "assigned_by": admin_email,
+                "assigned_at": dt.utcnow().isoformat()
+            }
+            
+            user_table.update_item(
+                Key={'uid': user_email},
+                UpdateExpression="SET interview_slots = :slots",
+                ExpressionAttributeValues={':slots': interview_slots}
+            )
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "detail": f"Successfully assigned {len(request.user_emails)} user(s) to slot",
+                "slot_id": request.slot_id,
+                "assigned_users": updated_assigned_users
+            }
+        )
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error assigning slot: {str(e)}"})
+
+
+@admin_app.get("/available-slots")
+async def get_available_slots(
+    domain: str = Query(...),
+    interview_round: int = Query(1),
+    authorization: str = Depends(get_access_token)
+):
+    """Get slots with available capacity for assignment"""
+    try:
+        admin_result = await verify_admin(authorization, domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        interview_table = resources['interview_table']
+        
+        # Scan for slots matching domain and round
+        response = interview_table.scan(
+            FilterExpression=Attr('domain').eq(domain) & Attr('interview_round').eq(interview_round)
+        )
+        
+        available_slots = []
+        for slot in response.get('Items', []):
+            assigned_users = slot.get('assigned_users', [])
+            max_capacity = slot.get('max_capacity', 1)
+            available_capacity = max_capacity - len(assigned_users)
+            
+            # Convert Decimal to int for JSON serialization
+            available_slots.append({
+                "iid": slot.get('iid'),
+                "time_slot": slot.get('time_slot'),
+                "panel": int(slot.get('panel', 0)),  # Convert Decimal to int
+                "assigned_users": assigned_users,
+                "max_capacity": int(max_capacity),  # Convert Decimal to int
+                "available_capacity": int(available_capacity)  # Convert Decimal to int
+            })
+        
+        return JSONResponse(status_code=200, content={"slots": available_slots})
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error fetching available slots: {str(e)}"})
+
+
+@admin_app.delete('/delete-question')
+async def delete_question(
+    domain: str = Query(...),
+    round: int = Query(...),
+    question_type: str = Query(...),
+    question_id: str = Query(..., description="ID of the question to delete"),
+    authorization: str = Depends(get_access_token)
+):
+    try:
+        admin_result = await verify_admin(authorization, domain)
+        if isinstance(admin_result, JSONResponse):
+            return admin_result
+        
+        quiz_table = resources['quiz_table']
+        
+        # Get current questions
+        response = quiz_table.get_item(Key={'qid': domain})
+        item = response.get('Item', {})
+        
+        field_name = f"{question_type}{round}"
+        questions = item.get(field_name, [])
+        
+        # Find and remove question by ID
+        found = False
+        for i, q in enumerate(questions):
+            # Convert both to string to be safe (DynamoDB might store as Decimal if it was int)
+            if str(q.get('id')) == str(question_id):
+                questions.pop(i)
+                found = True
+                break
+        
+        if not found:
+            return JSONResponse(status_code=404, content={"detail": "Question not found"})
+        
+        # Update DynamoDB
+        quiz_table.update_item(
+            Key={'qid': domain},
+            UpdateExpression=f"SET {field_name} = :questions",
+            ExpressionAttributeValues={':questions': questions}
+        )
+        
+        return JSONResponse(
+            status_code=200,
+            content={"detail": "Question deleted successfully"}
+        )
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error deleting question: {str(e)}"})
+    
