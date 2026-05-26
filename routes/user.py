@@ -96,7 +96,7 @@ async def submit_username(
         user = response.get('Item')
 
         if not user:
-            raise HTTPException(status_code=404, content="User not registered on VTOP")
+            raise HTTPException(status_code=404, detail="User not registered on VTOP")
 
         if user.get('username'):
             return JSONResponse(status_code=409, content= "Username already exists for this user")

@@ -36,13 +36,13 @@ async def post_domain(domain: Dict[str, List[str]], id_token: str = Depends(get_
         user = response.get('Item')
 
         if not user:
-            raise HTTPException(status_code=404, content="User not found")
+            raise HTTPException(status_code=404, detail="User not found")
 
         if "round1" in user:
             return JSONResponse(status_code=204, content="Quiz Started")
 
         if not domain:
-            raise HTTPException(status_code=400, content="Domain list cannot be empty")
+            raise HTTPException(status_code=400, detail="Domain list cannot be empty")
 
         for key, domain_list in domain.items():
             limit = 3 if "CC" in domain_list else 2
@@ -55,7 +55,7 @@ async def post_domain(domain: Dict[str, List[str]], id_token: str = Depends(get_
         return JSONResponse(status_code=200, content=domain)
 
     except Exception as e:
-        raise HTTPException(status_code=400, content=f"Error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
 
 @domain_app.get('/questions')
